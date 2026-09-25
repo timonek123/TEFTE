@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -9,24 +10,59 @@ import {
 } from 'react-native'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 
+const API_URL = 'http://192.168.68.53:3000'
+
 export default function HomeScreen() {
   const { account, connect } = useMobileWallet()
-  const [query, setQuery] = useState('')
-  const [submittedQuery, setSubmittedQuery] = useState('')
 
-  function handleSearch() {
+  const [query, setQuery] = useState('')
+  const [answer, setAnswer] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleSearch() {
     const cleanQuery = query.trim()
 
-    if (!cleanQuery) {
+    if (!cleanQuery || loading) {
       return
     }
 
-    setSubmittedQuery(cleanQuery)
+    try {
+      setLoading(true)
+      setAnswer('')
+
+      const response = await fetch(`${API_URL}/api/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: cleanQuery,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Something went wrong')
+      }
+
+      setAnswer(data.message)
+    } catch (error) {
+      console.error(error)
+      setAnswer('Could not connect to Vendra server.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Text style={styles.logo}>Vendra</Text>
 
@@ -64,18 +100,20 @@ export default function HomeScreen() {
           <Pressable
             style={[
               styles.searchButton,
-              !query.trim() && styles.searchButtonDisabled,
+              (!query.trim() || loading) && styles.searchButtonDisabled,
             ]}
             onPress={handleSearch}
-            disabled={!query.trim()}
+            disabled={!query.trim() || loading}
           >
-            <Text style={styles.searchButtonText}>Ask Vendra</Text>
+            <Text style={styles.searchButtonText}>
+              {loading ? 'Searching...' : 'Ask Vendra'}
+            </Text>
           </Pressable>
 
-          {submittedQuery ? (
+          {answer ? (
             <View style={styles.resultCard}>
-              <Text style={styles.resultLabel}>Your request</Text>
-              <Text style={styles.resultText}>{submittedQuery}</Text>
+              <Text style={styles.resultLabel}>Vendra</Text>
+              <Text style={styles.resultText}>{answer}</Text>
             </View>
           ) : null}
 
@@ -83,7 +121,7 @@ export default function HomeScreen() {
             AI-powered marketplace on Solana
           </Text>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   )
 }
@@ -97,7 +135,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+
+  scrollContent: {
     paddingTop: 24,
+    paddingBottom: 50,
   },
 
   header: {
