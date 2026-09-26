@@ -1,6 +1,7 @@
 require('dotenv').config()
 
 const express = require('express')
+const products = require('./products.json')
 
 const app = express()
 const PORT = 3000
@@ -10,13 +11,18 @@ app.use(express.json())
 app.get('/', (req, res) => {
   res.json({
     message: 'Vendra AI server is running',
+    products: products.length,
   })
+})
+
+app.get('/api/products', (req, res) => {
+  res.json(products)
 })
 
 app.post('/api/search', async (req, res) => {
   const { query } = req.body
 
-  if (!query) {
+  if (!query || !query.trim()) {
     return res.status(400).json({
       error: 'Query is required',
     })
@@ -32,25 +38,48 @@ app.post('/api/search', async (req, res) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-         models: [
-  'qwen/qwen3.8-27b:free',
-  'openrouter/free',
-],
+          models: [
+            'qwen/qwen3.8-27b:free',
+            'openrouter/free',
+          ],
           messages: [
             {
               role: 'system',
               content: `
 You are Vendra, an AI shopping assistant.
 
-Help the user understand what product best matches their request.
-Be concise and practical.
-Ask a clarifying question when important information is missing.
-Do not claim that you found real marketplace listings unless actual product data was provided.
+Your job is to select the best matching products from the provided Vendra catalog.
+
+RULES:
+- Use ONLY products from the provided catalog.
+- Never invent product IDs.
+- Never invent products, prices or specifications.
+- Respect the user's requirements such as budget, category, weight, condition and intended use.
+- Select up to 3 best matching products.
+- Put the best match first.
+- If nothing matches, return an empty productIds array.
+
+Return ONLY valid JSON.
+Do not use Markdown.
+Do not add text before or after the JSON.
+
+Use exactly this format:
+
+{
+  "productIds": ["product-id-1", "product-id-2"],
+  "summary": "Short explanation of why these products match."
+}
               `,
             },
             {
               role: 'user',
-              content: query,
+              content: `
+SHOPPING REQUEST:
+${query.trim()}
+
+VENDRA PRODUCT CATALOG:
+${JSON.stringify(products, null, 2)}
+              `,
             },
           ],
         }),
@@ -61,18 +90,43 @@ Do not claim that you found real marketplace listings unless actual product data
 
     if (!response.ok) {
       console.error('OpenRouter error:', data)
+
       return res.status(response.status).json({
         error: 'Vendra AI could not process the request.',
       })
     }
 
-    const message = data.choices?.[0]?.message?.content
+    const content = data.choices?.[0]?.message?.content
+
+    if (!content) {
+      throw new Error('AI returned an empty response')
+    }
+
+    const cleanedContent = content
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .trim()
+
+    const aiResult = JSON.parse(cleanedContent)
+
+    const requestedIds = Array.isArray(aiResult.productIds)
+      ? aiResult.productIds
+      : []
+
+    const matchedProducts = requestedIds
+      .map((id) => products.find((product) => product.id === id))
+      .filter(Boolean)
+      .slice(0, 3)
 
     res.json({
-      message: message || 'Vendra did not return an answer.',
+      summary:
+        typeof aiResult.summary === 'string'
+          ? aiResult.summary
+          : '',
+      products: matchedProducts,
     })
   } catch (error) {
-    console.error('Server error:', error)
+    console.error('Search error:', error)
 
     res.status(500).json({
       error: 'Vendra AI could not process the request.',
@@ -82,4 +136,5 @@ Do not claim that you found real marketplace listings unless actual product data
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Vendra AI server running on port ${PORT}`)
+  console.log(`Loaded ${products.length} products`)
 })

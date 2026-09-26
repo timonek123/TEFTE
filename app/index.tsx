@@ -12,12 +12,25 @@ import { useMobileWallet } from '@wallet-ui/react-native-kit'
 
 const API_URL = 'http://192.168.68.53:3000'
 
+type Product = {
+  id: string
+  title: string
+  category: string
+  price: number
+  currency: string
+  description: string
+  weightKg?: number
+  condition: string
+}
+
 export default function HomeScreen() {
   const { account, connect } = useMobileWallet()
 
   const [query, setQuery] = useState('')
-  const [answer, setAnswer] = useState('')
+  const [summary, setSummary] = useState('')
+  const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleSearch() {
     const cleanQuery = query.trim()
@@ -28,7 +41,9 @@ export default function HomeScreen() {
 
     try {
       setLoading(true)
-      setAnswer('')
+      setSummary('')
+      setProducts([])
+      setError('')
 
       const response = await fetch(`${API_URL}/api/search`, {
         method: 'POST',
@@ -46,10 +61,11 @@ export default function HomeScreen() {
         throw new Error(data.error || 'Something went wrong')
       }
 
-      setAnswer(data.message)
+      setSummary(data.summary || '')
+      setProducts(Array.isArray(data.products) ? data.products : [])
     } catch (error) {
       console.error(error)
-      setAnswer('Could not connect to Vendra server.')
+      setError('Could not connect to Vendra server.')
     } finally {
       setLoading(false)
     }
@@ -84,7 +100,7 @@ export default function HomeScreen() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Tell Vendra what you want. AI will help you find it.
+            Tell Vendra what you want. AI will find the best matches.
           </Text>
 
           <TextInput
@@ -110,10 +126,89 @@ export default function HomeScreen() {
             </Text>
           </Pressable>
 
-          {answer ? (
-            <View style={styles.resultCard}>
-              <Text style={styles.resultLabel}>Vendra</Text>
-              <Text style={styles.resultText}>{answer}</Text>
+          {summary ? (
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>
+                Vendra recommends
+              </Text>
+
+              <Text style={styles.summaryText}>
+                {summary}
+              </Text>
+            </View>
+          ) : null}
+
+          {products.length > 0 ? (
+            <View style={styles.results}>
+              <Text style={styles.resultsTitle}>
+                Recommended for you
+              </Text>
+
+              {products.map((product, index) => (
+                <View key={product.id} style={styles.productCard}>
+                  {index === 0 ? (
+                    <View style={styles.bestMatchBadge}>
+                      <Text style={styles.bestMatchText}>
+                        BEST MATCH
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <Text style={styles.category}>
+                    {product.category}
+                  </Text>
+
+                  <Text style={styles.productTitle}>
+                    {product.title}
+                  </Text>
+
+                  <Text style={styles.description}>
+                    {product.description}
+                  </Text>
+
+                  <View style={styles.detailsRow}>
+                    {product.weightKg ? (
+                      <Text style={styles.detail}>
+                        {product.weightKg} kg
+                      </Text>
+                    ) : null}
+
+                    <Text style={styles.detail}>
+                      {product.condition}
+                    </Text>
+                  </View>
+
+                  <View style={styles.productFooter}>
+                    <View>
+                      <Text style={styles.price}>
+                        {product.price} {product.currency}
+                      </Text>
+                    </View>
+
+                    <Pressable style={styles.viewButton}>
+                      <Text style={styles.viewButtonText}>
+                        View product
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {!loading && summary && products.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>
+                No matching products found.
+              </Text>
+            </View>
+          ) : null}
+
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>
+                {error}
+              </Text>
             </View>
           ) : null}
 
@@ -242,31 +337,160 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  resultCard: {
+  summaryCard: {
+    marginTop: 20,
+    padding: 18,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E3E3E0',
     borderRadius: 18,
-    padding: 18,
-    marginTop: 20,
   },
 
-  resultLabel: {
+  summaryLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#888888',
+    fontWeight: '800',
+    color: '#777777',
     marginBottom: 7,
     textTransform: 'uppercase',
   },
 
-  resultText: {
-    fontSize: 16,
+  summaryText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#333333',
+  },
+
+  results: {
+    marginTop: 28,
+  },
+
+  resultsTitle: {
+    fontSize: 22,
+    fontWeight: '800',
     color: '#111111',
-    lineHeight: 23,
+    marginBottom: 14,
+  },
+
+  productCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E3E3E0',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 14,
+  },
+
+  bestMatchBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#111111',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 14,
+  },
+
+  bestMatchText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+
+  category: {
+    fontSize: 12,
+    color: '#888888',
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+
+  productTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111111',
+    lineHeight: 26,
+  },
+
+  description: {
+    fontSize: 14,
+    color: '#666666',
+    lineHeight: 21,
+    marginTop: 9,
+  },
+
+  detailsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 14,
+    gap: 8,
+  },
+
+  detail: {
+    backgroundColor: '#F3F3F1',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    fontSize: 12,
+    color: '#555555',
+    fontWeight: '600',
+  },
+
+  productFooter: {
+    marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  price: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111111',
+  },
+
+  viewButton: {
+    backgroundColor: '#111111',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+
+  viewButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  emptyCard: {
+    marginTop: 20,
+    backgroundColor: '#FFFFFF',
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E3E3E0',
+  },
+
+  emptyText: {
+    color: '#666666',
+    fontSize: 15,
+  },
+
+  errorCard: {
+    marginTop: 20,
+    padding: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E3E3E0',
+  },
+
+  errorText: {
+    color: '#B42318',
+    fontSize: 15,
   },
 
   caption: {
-    marginTop: 18,
+    marginTop: 20,
     fontSize: 13,
     color: '#888888',
     textAlign: 'center',

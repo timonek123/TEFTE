@@ -1,0 +1,114 @@
+[
+  {
+    "id": "tent-001",
+    "title": "TrailLite 2 Ultralight Tent",
+    "category": "Camping",
+    "price": 129,
+    "currency": "USDC",
+    "description": "Lightweight 2-person backpacking tent for hiking and overnight trips.",
+    "weightKg": 1.45,
+    "condition": "New"
+  },
+  {
+    "id": "tent-002",
+    "title": "Summit Duo 2P Tent",
+    "category": "Camping",
+    "price": 145,
+    "currency": "USDC",
+    "description": "Weather-resistant 2-person tent with two entrances and good ventilation.",
+    "weightKg": 1.8,
+    "condition": "New"
+  },
+  {
+    "id": "tent-003",
+    "title": "Cloud Trek 2 Tent",
+    "category": "Camping",
+    "price": 99,
+    "currency": "USDC",
+    "description": "Affordable compact 2-person tent for weekend hiking and camping.",
+    "weightKg": 2.1,
+    "condition": "Used - excellent"
+  },
+  {
+    "id": "bike-001",
+    "title": "Urban Gravel Bike",
+    "category": "Cycling",
+    "price": 480,
+    "currency": "USDC",
+    "description": "Versatile gravel bike for city roads, rough pavement and light forest trails.",
+    "condition": "Used - excellent"
+  },
+  {
+    "id": "bike-002",
+    "title": "CityRide Commuter Bike",
+    "category": "Cycling",
+    "price": 260,
+    "currency": "USDC",
+    "description": "Comfortable city bicycle for everyday commuting.",
+    "condition": "Used - good"
+  },
+  {
+    "id": "phone-001",
+    "title": "Nova X Smartphone",
+    "category": "Electronics",
+    "price": 320,
+    "currency": "USDC",
+    "description": "Android smartphone with 256 GB storage, OLED display and 5G.",
+    "condition": "New"
+  },
+  {
+    "id": "phone-002",
+    "title": "PixelWave Mini",
+    "category": "Electronics",
+    "price": 215,
+    "currency": "USDC",
+    "description": "Compact Android smartphone with 128 GB storage and a high-quality camera.",
+    "condition": "Used - excellent"
+  },
+  {
+    "id": "headphones-001",
+    "title": "QuietBeat ANC Headphones",
+    "category": "Electronics",
+    "price": 89,
+    "currency": "USDC",
+    "description": "Wireless over-ear headphones with active noise cancellation.",
+    "condition": "New"
+  },
+  {
+    "id": "pack-001",
+    "title": "TrailPack 40L",
+    "category": "Camping",
+    "price": 74,
+    "currency": "USDC",
+    "description": "Lightweight 40-liter hiking backpack with ventilated back panel.",
+    "weightKg": 1.05,
+    "condition": "New"
+  },
+  {
+    "id": "watch-001",
+    "title": "ActiveTrack GPS Watch",
+    "category": "Wearables",
+    "price": 135,
+    "currency": "USDC",
+    "description": "GPS sports watch with heart-rate tracking and multi-day battery life.",
+    "condition": "New"
+  },
+  {
+    "id": "laptop-001",
+    "title": "WorkBook Air 14",
+    "category": "Computers",
+    "price": 590,
+    "currency": "USDC",
+    "description": "Lightweight 14-inch laptop with 16 GB RAM and 512 GB SSD.",
+    "condition": "Used - excellent"
+  },
+  {
+    "id": "camera-001",
+    "title": "PocketCam Creator",
+    "category": "Photography",
+    "price": 410,
+    "currency": "USDC",
+    "description": "Compact camera for travel, photography and content creation.",
+    "condition": "Used - excellent"
+  }
+]
