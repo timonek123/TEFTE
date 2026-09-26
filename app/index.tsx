@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   Pressable,
@@ -25,6 +26,7 @@ type Product = {
 
 export default function HomeScreen() {
   const { account, connect } = useMobileWallet()
+const router = useRouter()
 
   const [query, setQuery] = useState('')
   const [summary, setSummary] = useState('')
@@ -185,7 +187,15 @@ export default function HomeScreen() {
                       </Text>
                     </View>
 
-                    <Pressable style={styles.viewButton}>
+                   <Pressable
+  style={styles.viewButton}
+  onPress={() =>
+    router.push({
+      pathname: '/product/[id]',
+      params: { id: product.id },
+    })
+  }
+>
                       <Text style={styles.viewButtonText}>
                         View product
                       </Text>
