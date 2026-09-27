@@ -1,5 +1,17 @@
 import React, { useEffect, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useMobileWallet } from '@wallet-ui/react-native-kit'
+import {
+  address,
+  appendTransactionMessageInstruction,
+  compileTransaction,
+  createTransactionMessage,
+  lamports,
+  pipe,
+  setTransactionMessageFeePayerSigner,
+  setTransactionMessageLifetimeUsingBlockhash,
+} from '@solana/kit'
+import { getTransferSolInstruction } from '@solana-program/system'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   ActivityIndicator,
@@ -10,7 +22,11 @@ import {
   View,
 } from 'react-native'
 
-const API_URL = 'http://192.168.68.53:3000'
+const API_URL = 'http://192.168.68.52:3000'
+
+const SELLER_ADDRESS = address(
+  'GqozyB3iStZU8kW5T1wdPWq8YnGX4XKd7TC9Zs5xTmMw'
+)
 
 type Product = {
   id: string
@@ -26,6 +42,13 @@ type Product = {
 export default function ProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const router = useRouter()
+
+  const {
+    account,
+    client,
+    getTransactionSigner,
+    signAndSendTransactions,
+  } = useMobileWallet()
 
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
@@ -64,11 +87,93 @@ export default function ProductScreen() {
     loadProduct()
   }, [id])
 
+  async function handleBuy() {
+    if (!account) {
+      console.error(
+        'TEFTE payment error: wallet is not connected'
+      )
+      return
+    }
+
+    try {
+      // 1. Отримуємо актуальний blockhash і slot із Devnet.
+      const {
+        context: { slot: minContextSlot },
+        value: latestBlockhash,
+      } = await client.rpc.getLatestBlockhash().send()
+
+      // 2. Створюємо ОДИН signer Seed Vault.
+      const buyerSigner = getTransactionSigner(
+        account.address,
+        minContextSlot
+      )
+
+      // 3. Створюємо SOL transfer.
+      const transferInstruction =
+        getTransferSolInstruction({
+          source: buyerSigner,
+          destination: SELLER_ADDRESS,
+
+          // DEVNET TEST:
+          // 1,000,000 lamports = 0.001 SOL
+          amount: lamports(1000000n),
+        })
+
+      // 4. Будуємо transaction message.
+      // Той самий buyerSigner є і source, і fee payer.
+      const transactionMessage = pipe(
+        createTransactionMessage({ version: 0 }),
+
+        (tx) =>
+          appendTransactionMessageInstruction(
+            transferInstruction,
+            tx
+          ),
+
+        (tx) =>
+          setTransactionMessageFeePayerSigner(
+            buyerSigner,
+            tx
+          ),
+
+        (tx) =>
+          setTransactionMessageLifetimeUsingBlockhash(
+            latestBlockhash,
+            tx
+          )
+      )
+
+      // 5. Компілюємо готову транзакцію.
+      const transaction =
+        compileTransaction(transactionMessage)
+
+      // 6. Передаємо її безпосередньо Seed Vault.
+      // sendTransactions() тут навмисно НЕ використовуємо,
+      // щоб Wallet UI не створював другого signer-а.
+      const signature =
+        await signAndSendTransactions(
+          transaction,
+          minContextSlot
+        )
+
+      console.log(
+        'TEFTE payment signature:',
+        signature
+      )
+    } catch (error) {
+      console.error(
+        'TEFTE payment error:',
+        error
+      )
+    }
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.center}>
           <ActivityIndicator size="large" />
+
           <Text style={styles.loadingText}>
             Loading product...
           </Text>
@@ -109,7 +214,7 @@ export default function ProductScreen() {
           onPress={() => router.back()}
         >
           <Text style={styles.backLinkText}>
-            ← Back
+            Back
           </Text>
         </Pressable>
 
@@ -163,10 +268,13 @@ export default function ProductScreen() {
           </Text>
 
           <Text style={styles.paymentHint}>
-            Secure payment with your Solana wallet.
+            Devnet test payment through your Solana wallet.
           </Text>
 
-          <Pressable style={styles.buyButton}>
+          <Pressable
+            style={styles.buyButton}
+            onPress={handleBuy}
+          >
             <Text style={styles.buyButtonText}>
               Buy with Solana
             </Text>
