@@ -10,7 +10,7 @@ app.use(express.json())
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Vendra AI server is running',
+    message: 'TEFTE AI server is running',
     products: products.length,
   })
 })
@@ -46,9 +46,9 @@ app.post('/api/search', async (req, res) => {
             {
               role: 'system',
               content: `
-You are Vendra, an AI shopping assistant.
+You are TEFTE, an AI shopping assistant.
 
-Your job is to select the best matching products from the provided Vendra catalog.
+Your job is to select the best matching products from the provided TEFTE catalog.
 
 RULES:
 - Use ONLY products from the provided catalog.
@@ -77,7 +77,7 @@ Use exactly this format:
 SHOPPING REQUEST:
 ${query.trim()}
 
-VENDRA PRODUCT CATALOG:
+TEFTE PRODUCT CATALOG:
 ${JSON.stringify(products, null, 2)}
               `,
             },
@@ -92,7 +92,7 @@ ${JSON.stringify(products, null, 2)}
       console.error('OpenRouter error:', data)
 
       return res.status(response.status).json({
-        error: 'Vendra AI could not process the request.',
+        error: 'TEFTE AI could not process the request.',
       })
     }
 
@@ -129,12 +129,12 @@ ${JSON.stringify(products, null, 2)}
     console.error('Search error:', error)
 
     res.status(500).json({
-      error: 'Vendra AI could not process the request.',
+      error: 'TEFTE AI could not process the request.',
     })
   }
 })
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Vendra AI server running on port ${PORT}`)
+  console.log(`TEFTE AI server running on port ${PORT}`)
   console.log(`Loaded ${products.length} products`)
 })

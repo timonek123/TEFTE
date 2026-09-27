@@ -68,7 +68,7 @@ const router = useRouter()
       setProducts(Array.isArray(data.products) ? data.products : [])
     } catch (error) {
       console.error(error)
-      setError('Could not connect to Vendra server.')
+      setError('Could not connect to TEFTE server.')
     } finally {
       setLoading(false)
     }
@@ -83,7 +83,7 @@ const router = useRouter()
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.logo}>Vendra</Text>
+          <Text style={styles.logo}>TEFTE</Text>
 
           {account ? (
             <View style={styles.connectedWallet}>
@@ -103,7 +103,7 @@ const router = useRouter()
           </Text>
 
           <Text style={styles.subtitle}>
-            Tell Vendra what you want. AI will find the best matches.
+            Tell TEFTE what you want. AI will find the best matches.
           </Text>
 
           <TextInput
@@ -125,14 +125,14 @@ const router = useRouter()
             disabled={!query.trim() || loading}
           >
             <Text style={styles.searchButtonText}>
-              {loading ? 'Searching...' : 'Ask Vendra'}
+              {loading ? 'Searching...' : 'Ask TEFTE'}
             </Text>
           </Pressable>
 
           {summary ? (
             <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>
-                Vendra recommends
+                TEFTE recommends
               </Text>
 
               <Text style={styles.summaryText}>
@@ -507,3 +507,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 })
+
+
