@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,6 +23,8 @@ type Product = {
   description: string
   weightKg?: number
   condition: string
+  imageUrl?: string | null
+  imageUrls?: string[]
 }
 
 const quickCategories = [
@@ -46,6 +49,26 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false)
   const [loadingRecommended, setLoadingRecommended] = useState(false)
   const [error, setError] = useState('')
+
+  function getProductImage(product: Product) {
+    const imagePath =
+      Array.isArray(product.imageUrls) && product.imageUrls.length > 0
+        ? product.imageUrls[0]
+        : product.imageUrl
+
+    if (!imagePath) {
+      return null
+    }
+
+    if (
+      imagePath.startsWith('http://') ||
+      imagePath.startsWith('https://')
+    ) {
+      return imagePath
+    }
+
+    return `${API_URL}${imagePath}`
+  }
 
   async function searchProducts(searchQuery: string) {
     const cleanQuery = searchQuery.trim()
@@ -88,8 +111,8 @@ export default function HomeScreen() {
 
       const data = await searchProducts(cleanQuery)
 
-      setSummary(data.summary || '')
-      setProducts(Array.isArray(data.products) ? data.products : [])
+      setSummary(data?.summary || '')
+      setProducts(Array.isArray(data?.products) ? data.products : [])
     } catch (error) {
       console.error(error)
       setError('Could not connect to TEFTE server.')
@@ -132,6 +155,33 @@ export default function HomeScreen() {
         id: product.id,
       },
     })
+  }
+
+  function ProductImage({
+    product,
+    style,
+  }: {
+    product: Product
+    style: any
+  }) {
+    const imageUri = getProductImage(product)
+
+    if (imageUri) {
+      return (
+        <Image
+          source={{ uri: imageUri }}
+          style={style}
+          resizeMode="cover"
+        />
+      )
+    }
+
+    return (
+      <View style={[style, styles.imagePlaceholder]}>
+        <Text style={styles.imagePlaceholderIcon}>TEFTE</Text>
+        <Text style={styles.imagePlaceholderText}>No photo yet</Text>
+      </View>
+    )
   }
 
   return (
@@ -236,36 +286,45 @@ export default function HomeScreen() {
                   style={styles.recommendedCard}
                   onPress={() => openProduct(product)}
                 >
-                  {index === 0 ? (
-                    <View style={styles.matchBadge}>
-                      <Text style={styles.matchBadgeText}>AI PICK</Text>
-                    </View>
-                  ) : null}
+                  <View style={styles.recommendedImageWrap}>
+                    <ProductImage
+                      product={product}
+                      style={styles.recommendedImage}
+                    />
 
-                  <Text style={styles.recommendedCategory}>
-                    {product.category}
-                  </Text>
+                    {index === 0 ? (
+                      <View style={styles.matchBadge}>
+                        <Text style={styles.matchBadgeText}>AI PICK</Text>
+                      </View>
+                    ) : null}
+                  </View>
 
-                  <Text
-                    style={styles.recommendedTitle}
-                    numberOfLines={2}
-                  >
-                    {product.title}
-                  </Text>
-
-                  <Text
-                    style={styles.recommendedDescription}
-                    numberOfLines={3}
-                  >
-                    {product.description}
-                  </Text>
-
-                  <View style={styles.recommendedBottom}>
-                    <Text style={styles.recommendedPrice}>
-                      {product.price} {product.currency}
+                  <View style={styles.recommendedContent}>
+                    <Text style={styles.recommendedCategory}>
+                      {product.category}
                     </Text>
 
-                    <Text style={styles.arrow}>→</Text>
+                    <Text
+                      style={styles.recommendedTitle}
+                      numberOfLines={2}
+                    >
+                      {product.title}
+                    </Text>
+
+                    <Text
+                      style={styles.recommendedDescription}
+                      numberOfLines={2}
+                    >
+                      {product.description}
+                    </Text>
+
+                    <View style={styles.recommendedBottom}>
+                      <Text style={styles.recommendedPrice}>
+                        {product.price} {product.currency}
+                      </Text>
+
+                      <Text style={styles.arrow}>→</Text>
+                    </View>
                   </View>
                 </Pressable>
               ))}
@@ -284,7 +343,6 @@ export default function HomeScreen() {
           <View style={styles.section}>
             <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>TEFTE recommends</Text>
-
               <Text style={styles.summaryText}>{summary}</Text>
             </View>
           </View>
@@ -301,47 +359,59 @@ export default function HomeScreen() {
                   style={styles.productCard}
                   onPress={() => openProduct(product)}
                 >
-                  {index === 0 ? (
-                    <View style={styles.bestMatchBadge}>
-                      <Text style={styles.bestMatchText}>
-                        BEST MATCH
-                      </Text>
-                    </View>
-                  ) : null}
+                  <View style={styles.productImageWrap}>
+                    <ProductImage
+                      product={product}
+                      style={styles.productImage}
+                    />
 
-                  <Text style={styles.productCategory}>
-                    {product.category}
-                  </Text>
-
-                  <Text style={styles.productTitle}>
-                    {product.title}
-                  </Text>
-
-                  <Text style={styles.description}>
-                    {product.description}
-                  </Text>
-
-                  <View style={styles.detailsRow}>
-                    {product.weightKg ? (
-                      <Text style={styles.detail}>
-                        {product.weightKg} kg
-                      </Text>
+                    {index === 0 ? (
+                      <View style={styles.bestMatchBadge}>
+                        <Text style={styles.bestMatchText}>
+                          BEST MATCH
+                        </Text>
+                      </View>
                     ) : null}
-
-                    <Text style={styles.detail}>
-                      {product.condition}
-                    </Text>
                   </View>
 
-                  <View style={styles.productFooter}>
-                    <Text style={styles.price}>
-                      {product.price} {product.currency}
+                  <View style={styles.productContent}>
+                    <Text style={styles.productCategory}>
+                      {product.category}
                     </Text>
 
-                    <View style={styles.viewButton}>
-                      <Text style={styles.viewButtonText}>
-                        View product
+                    <Text style={styles.productTitle}>
+                      {product.title}
+                    </Text>
+
+                    <Text
+                      style={styles.description}
+                      numberOfLines={3}
+                    >
+                      {product.description}
+                    </Text>
+
+                    <View style={styles.detailsRow}>
+                      {product.weightKg ? (
+                        <Text style={styles.detail}>
+                          {product.weightKg} kg
+                        </Text>
+                      ) : null}
+
+                      <Text style={styles.detail}>
+                        {product.condition}
                       </Text>
+                    </View>
+
+                    <View style={styles.productFooter}>
+                      <Text style={styles.price}>
+                        {product.price} {product.currency}
+                      </Text>
+
+                      <View style={styles.viewButton}>
+                        <Text style={styles.viewButtonText}>
+                          View product
+                        </Text>
+                      </View>
                     </View>
                   </View>
                 </Pressable>
@@ -538,21 +608,38 @@ const styles = StyleSheet.create({
 
   recommendedCard: {
     width: 245,
-    minHeight: 190,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E3E3E0',
     borderRadius: 20,
-    padding: 17,
+    overflow: 'hidden',
+  },
+
+  recommendedImageWrap: {
+    width: '100%',
+    height: 155,
+    position: 'relative',
+  },
+
+  recommendedImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#EAEAE7',
+  },
+
+  recommendedContent: {
+    padding: 16,
+    minHeight: 180,
   },
 
   matchBadge: {
-    alignSelf: 'flex-start',
+    position: 'absolute',
+    top: 12,
+    left: 12,
     backgroundColor: '#111111',
     borderRadius: 12,
     paddingHorizontal: 9,
     paddingVertical: 5,
-    marginBottom: 11,
   },
 
   matchBadgeText: {
@@ -602,6 +689,26 @@ const styles = StyleSheet.create({
     color: '#111111',
   },
 
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAEAE7',
+  },
+
+  imagePlaceholderIcon: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#A4A4A0',
+    letterSpacing: 1,
+  },
+
+  imagePlaceholderText: {
+    marginTop: 5,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#AAAAA6',
+  },
+
   summaryCard: {
     padding: 18,
     backgroundColor: '#FFFFFF',
@@ -633,17 +740,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E3E3E0',
     borderRadius: 20,
+    marginBottom: 15,
+    overflow: 'hidden',
+  },
+
+  productImageWrap: {
+    width: '100%',
+    height: 220,
+    position: 'relative',
+  },
+
+  productImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#EAEAE7',
+  },
+
+  productContent: {
     padding: 18,
-    marginBottom: 13,
   },
 
   bestMatchBadge: {
-    alignSelf: 'flex-start',
+    position: 'absolute',
+    top: 13,
+    left: 13,
     backgroundColor: '#111111',
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    marginBottom: 12,
   },
 
   bestMatchText: {
