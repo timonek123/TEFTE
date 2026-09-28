@@ -1,0 +1,31 @@
+﻿[
+    {
+        "id":  "user-1790605722969",
+        "title":  "Samsung Galaxy Fit3 Fitness Tracker",
+        "category":  "Electronics",
+        "price":  80,
+        "currency":  "USDC",
+        "description":  "Brand new Samsung Galaxy Fit3 fitness tracker in original white retail packaging. This sleek smart band features a vibrant display, step tracking, heart rate monitoring, and battery level indicators.",
+        "condition":  "New",
+        "seller":  "crypton.skr",
+        "userListing":  true,
+        "imageUrls":  [
+                          "/uploads/listing-1790605722701-171190430.jpg",
+                          "/uploads/listing-1790605722826-233703301.jpg",
+                          "/uploads/listing-1790605722959-307741567.jpg"
+                      ],
+        "imageUrl":  "/uploads/listing-1790605722701-171190430.jpg"
+    },
+    {
+        "id":  "user-1790596380230",
+        "title":  "Samsung Galaxy Fit3 Fitness Tracker (White)",
+        "category":  "Electronics",
+        "price":  90,
+        "currency":  "USDC",
+        "description":  "Brand new Samsung Galaxy Fit3 fitness tracker in white, presented in its original sealed retail packaging. Perfect for tracking steps, heart rate, sleep, and notifications.",
+        "condition":  "New",
+        "seller":  "crypton.skr",
+        "userListing":  true,
+        "imageUrl":  "/uploads/listing-1790596380087.jpg"
+    }
+]

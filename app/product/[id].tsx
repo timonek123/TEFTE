@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import {
@@ -15,6 +15,10 @@ import { getTransferSolInstruction } from '@solana-program/system'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   ActivityIndicator,
+  Dimensions,
+  Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,6 +32,11 @@ const SELLER_ADDRESS = address(
   'GqozyB3iStZU8kW5T1wdPWq8YnGX4XKd7TC9Zs5xTmMw'
 )
 
+const SCREEN_WIDTH = Dimensions.get('window').width
+const PAGE_HORIZONTAL_PADDING = 24
+const GALLERY_WIDTH =
+  SCREEN_WIDTH - PAGE_HORIZONTAL_PADDING * 2
+
 type Product = {
   id: string
   title: string
@@ -37,6 +46,8 @@ type Product = {
   description: string
   weightKg?: number
   condition: string
+  imageUrl?: string | null
+  imageUrls?: string[]
 }
 
 export default function ProductScreen() {
@@ -50,9 +61,13 @@ export default function ProductScreen() {
     signAndSendTransactions,
   } = useMobileWallet()
 
-  const [product, setProduct] = useState<Product | null>(null)
+  const [product, setProduct] =
+    useState<Product | null>(null)
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [activeImageIndex, setActiveImageIndex] =
+    useState(0)
 
   useEffect(() => {
     async function loadProduct() {
@@ -60,8 +75,12 @@ export default function ProductScreen() {
         setLoading(true)
         setError('')
 
-        const response = await fetch(`${API_URL}/api/products`)
-        const products: Product[] = await response.json()
+        const response = await fetch(
+          `${API_URL}/api/products`
+        )
+
+        const products: Product[] =
+          await response.json()
 
         if (!response.ok) {
           throw new Error('Could not load products')
@@ -78,7 +97,10 @@ export default function ProductScreen() {
         setProduct(foundProduct)
       } catch (error) {
         console.error(error)
-        setError('Could not load this product.')
+
+        setError(
+          'Could not load this product.'
+        )
       } finally {
         setLoading(false)
       }
@@ -86,6 +108,38 @@ export default function ProductScreen() {
 
     loadProduct()
   }, [id])
+
+  const productImages = useMemo(() => {
+    if (!product) {
+      return []
+    }
+
+    if (
+      Array.isArray(product.imageUrls) &&
+      product.imageUrls.length > 0
+    ) {
+      return product.imageUrls
+    }
+
+    if (product.imageUrl) {
+      return [product.imageUrl]
+    }
+
+    return []
+  }, [product])
+
+  function handleGalleryScrollEnd(
+    event: NativeSyntheticEvent<NativeScrollEvent>
+  ) {
+    const offsetX =
+      event.nativeEvent.contentOffset.x
+
+    const nextIndex = Math.round(
+      offsetX / GALLERY_WIDTH
+    )
+
+    setActiveImageIndex(nextIndex)
+  }
 
   async function handleBuy() {
     if (!account) {
@@ -96,33 +150,31 @@ export default function ProductScreen() {
     }
 
     try {
-      // 1. Отримуємо актуальний blockhash і slot із Devnet.
       const {
         context: { slot: minContextSlot },
         value: latestBlockhash,
-      } = await client.rpc.getLatestBlockhash().send()
+      } =
+        await client.rpc
+          .getLatestBlockhash()
+          .send()
 
-      // 2. Створюємо ОДИН signer Seed Vault.
-      const buyerSigner = getTransactionSigner(
-        account.address,
-        minContextSlot
-      )
+      const buyerSigner =
+        getTransactionSigner(
+          account.address,
+          minContextSlot
+        )
 
-      // 3. Створюємо SOL transfer.
       const transferInstruction =
         getTransferSolInstruction({
           source: buyerSigner,
           destination: SELLER_ADDRESS,
-
-          // DEVNET TEST:
-          // 1,000,000 lamports = 0.001 SOL
           amount: lamports(1000000n),
         })
 
-      // 4. Будуємо transaction message.
-      // Той самий buyerSigner є і source, і fee payer.
       const transactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
+        createTransactionMessage({
+          version: 0,
+        }),
 
         (tx) =>
           appendTransactionMessageInstruction(
@@ -143,13 +195,11 @@ export default function ProductScreen() {
           )
       )
 
-      // 5. Компілюємо готову транзакцію.
       const transaction =
-        compileTransaction(transactionMessage)
+        compileTransaction(
+          transactionMessage
+        )
 
-      // 6. Передаємо її безпосередньо Seed Vault.
-      // sendTransactions() тут навмисно НЕ використовуємо,
-      // щоб Wallet UI не створював другого signer-а.
       const signature =
         await signAndSendTransactions(
           transaction,
@@ -206,8 +256,12 @@ export default function ProductScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          styles.content
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
       >
         <Pressable
           style={styles.backLink}
@@ -217,6 +271,67 @@ export default function ProductScreen() {
             Back
           </Text>
         </Pressable>
+
+        {productImages.length > 0 ? (
+          <View style={styles.gallery}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={
+                false
+              }
+              onMomentumScrollEnd={
+                handleGalleryScrollEnd
+              }
+            >
+              {productImages.map(
+                (imagePath, index) => (
+                  <Image
+                    key={`${imagePath}-${index}`}
+                    source={{
+                      uri: `${API_URL}${imagePath}`,
+                    }}
+                    style={styles.productImage}
+                    resizeMode="cover"
+                  />
+                )
+              )}
+            </ScrollView>
+
+            {productImages.length > 1 ? (
+              <>
+                <View
+                  style={styles.imageCounter}
+                >
+                  <Text
+                    style={
+                      styles.imageCounterText
+                    }
+                  >
+                    {activeImageIndex + 1} /{' '}
+                    {productImages.length}
+                  </Text>
+                </View>
+
+                <View style={styles.dots}>
+                  {productImages.map(
+                    (_, index) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.dot,
+                          index ===
+                            activeImageIndex &&
+                            styles.activeDot,
+                        ]}
+                      />
+                    )
+                  )}
+                </View>
+              </>
+            ) : null}
+          </View>
+        ) : null}
 
         <Text style={styles.category}>
           {product.category}
@@ -228,14 +343,17 @@ export default function ProductScreen() {
 
         <View style={styles.priceRow}>
           <Text style={styles.price}>
-            {product.price} {product.currency}
+            {product.price}{' '}
+            {product.currency}
           </Text>
         </View>
 
         <View style={styles.detailsRow}>
           {product.weightKg ? (
             <View style={styles.detailPill}>
-              <Text style={styles.detailText}>
+              <Text
+                style={styles.detailText}
+              >
                 {product.weightKg} kg
               </Text>
             </View>
@@ -259,30 +377,43 @@ export default function ProductScreen() {
         </View>
 
         <View style={styles.paymentCard}>
-          <Text style={styles.paymentLabel}>
+          <Text
+            style={styles.paymentLabel}
+          >
             PRICE
           </Text>
 
-          <Text style={styles.paymentPrice}>
-            {product.price} {product.currency}
+          <Text
+            style={styles.paymentPrice}
+          >
+            {product.price}{' '}
+            {product.currency}
           </Text>
 
-          <Text style={styles.paymentHint}>
-            Devnet test payment through your Solana wallet.
+          <Text
+            style={styles.paymentHint}
+          >
+            Devnet test payment through
+            your Solana wallet.
           </Text>
 
           <Pressable
             style={styles.buyButton}
             onPress={handleBuy}
           >
-            <Text style={styles.buyButtonText}>
+            <Text
+              style={
+                styles.buyButtonText
+              }
+            >
               Buy with Solana
             </Text>
           </Pressable>
         </View>
 
         <Text style={styles.caption}>
-          AI-powered marketplace on Solana
+          AI-powered marketplace on
+          Solana
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -296,7 +427,8 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal:
+      PAGE_HORIZONTAL_PADDING,
     paddingTop: 20,
     paddingBottom: 50,
   },
@@ -336,13 +468,63 @@ const styles = StyleSheet.create({
   backLink: {
     alignSelf: 'flex-start',
     paddingVertical: 8,
-    marginBottom: 28,
+    marginBottom: 18,
   },
 
   backLinkText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#111111',
+  },
+
+  gallery: {
+    width: GALLERY_WIDTH,
+    marginBottom: 24,
+    position: 'relative',
+  },
+
+  productImage: {
+    width: GALLERY_WIDTH,
+    height: 340,
+    borderRadius: 24,
+    backgroundColor: '#EAEAE7',
+  },
+
+  imageCounter: {
+    position: 'absolute',
+    right: 14,
+    top: 14,
+    backgroundColor:
+      'rgba(0, 0, 0, 0.65)',
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+
+  imageCounterText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: '#C9C9C5',
+  },
+
+  activeDot: {
+    width: 20,
+    backgroundColor: '#111111',
   },
 
   category: {

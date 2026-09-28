@@ -53,3 +53,10 @@ simulate-payment.mjs
 
 sell-photo-working.tsx
 server/index-before-vision.js
+
+server/index-before-multiphoto.js
+sell-before-multiphoto.tsx
+server/current-products-backup.json
+
+product-before-gallery.tsx
+sell-before-multiphoto-2.tsx

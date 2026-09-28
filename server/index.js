@@ -1,16 +1,92 @@
-require('dotenv').config()
+﻿require('dotenv').config()
 
 const express = require('express')
 const multer = require('multer')
+const fs = require('fs')
+const path = require('path')
 const products = require('./products.json')
 
 const app = express()
 const PORT = 3000
 
+const USER_PRODUCTS_FILE = path.join(__dirname, 'user-products.json')
+const UPLOADS_DIR = path.join(__dirname, 'uploads')
+
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true })
+}
+
+function loadUserProducts() {
+  try {
+    if (!fs.existsSync(USER_PRODUCTS_FILE)) {
+      fs.writeFileSync(USER_PRODUCTS_FILE, '[]', 'utf8')
+      return []
+    }
+
+    const raw = fs
+      .readFileSync(USER_PRODUCTS_FILE, 'utf8')
+      .replace(/^\uFEFF/, '')
+      .trim()
+
+    if (!raw) {
+      return []
+    }
+
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.error('Could not load user-products.json:', error)
+    return []
+  }
+}
+
+function saveUserProducts() {
+  fs.writeFileSync(
+    USER_PRODUCTS_FILE,
+    JSON.stringify(userProducts, null, 2),
+    'utf8'
+  )
+}
+
+const userProducts = loadUserProducts()
+
+function getAllProducts() {
+  return [...userProducts, ...products]
+}
+
 app.use(express.json())
 
+app.use('/uploads', express.static(UPLOADS_DIR))
+
+// AI image analysis:
+// the image stays in memory and is sent to the vision model.
 const upload = multer({
   storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 8 * 1024 * 1024,
+  },
+})
+
+// Published listing images:
+// these are saved to server/uploads.
+const listingStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOADS_DIR)
+  },
+
+  filename: (req, file, cb) => {
+    const extension = file.originalname.includes('.')
+      ? file.originalname.substring(
+          file.originalname.lastIndexOf('.')
+        )
+      : '.jpg'
+
+    cb(null, `listing-${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`)
+  },
+})
+
+const uploadListing = multer({
+  storage: listingStorage,
   limits: {
     fileSize: 8 * 1024 * 1024,
   },
@@ -24,9 +100,112 @@ app.get('/', (req, res) => {
 })
 
 app.get('/api/products', (req, res) => {
-  res.json(products)
+  res.json(getAllProducts())
 })
 
+// Publish a marketplace listing.
+// Accepts multipart/form-data with an optional "image" file.
+app.post(
+  '/api/products',
+  uploadListing.array('images', 8),
+  (req, res) => {
+    const {
+      title,
+      category,
+      condition,
+      description,
+      price,
+    } = req.body
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({
+        error: 'Product title is required.',
+      })
+    }
+
+    const numericPrice = Number(price)
+
+    if (
+      !Number.isFinite(numericPrice) ||
+      numericPrice < 0
+    ) {
+      return res.status(400).json({
+        error: 'Valid product price is required.',
+      })
+    }
+
+    const newProduct = {
+      id: `user-${Date.now()}`,
+
+      title: title.trim(),
+
+      category:
+        typeof category === 'string' &&
+        category.trim()
+          ? category.trim()
+          : 'Other',
+
+      price: numericPrice,
+
+      currency: 'USDC',
+
+      description:
+        typeof description === 'string'
+          ? description.trim()
+          : '',
+
+      condition:
+        typeof condition === 'string' &&
+        condition.trim()
+          ? condition.trim()
+          : 'Good',
+
+      seller: 'crypton.skr',
+
+      userListing: true,
+
+      imageUrls: Array.isArray(req.files)
+        ? req.files.map(
+            (file) => `/uploads/${file.filename}`
+          )
+        : [],
+
+      imageUrl:
+        Array.isArray(req.files) && req.files[0]
+          ? `/uploads/${req.files[0].filename}`
+          : null,
+    }
+
+    userProducts.unshift(newProduct)
+
+    try {
+      saveUserProducts()
+    } catch (error) {
+      userProducts.shift()
+
+      console.error(
+        'Could not save TEFTE listing:',
+        error
+      )
+
+      return res.status(500).json({
+        error: 'Could not save the listing.',
+      })
+    }
+
+    console.log(
+      'TEFTE listing published:',
+      newProduct
+    )
+
+    res.status(201).json({
+      message: 'Listing published successfully.',
+      product: newProduct,
+    })
+  }
+)
+
+// Ask TEFTE AI product search.
 app.post('/api/search', async (req, res) => {
   const { query } = req.body
 
@@ -41,18 +220,22 @@ app.post('/api/search', async (req, res) => {
       'https://openrouter.ai/api/v1/chat/completions',
       {
         method: 'POST',
+
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
         },
+
         body: JSON.stringify({
           models: [
             'qwen/qwen3.8-27b:free',
             'openrouter/free',
           ],
+
           messages: [
             {
               role: 'system',
+
               content: `
 You are TEFTE, an AI shopping assistant.
 
@@ -79,14 +262,16 @@ Use exactly this format:
 }
               `,
             },
+
             {
               role: 'user',
+
               content: `
 SHOPPING REQUEST:
 ${query.trim()}
 
 TEFTE PRODUCT CATALOG:
-${JSON.stringify(products, null, 2)}
+${JSON.stringify(getAllProducts(), null, 2)}
               `,
             },
           ],
@@ -97,17 +282,26 @@ ${JSON.stringify(products, null, 2)}
     const data = await response.json()
 
     if (!response.ok) {
-      console.error('OpenRouter error:', data)
+      console.error(
+        'OpenRouter error:',
+        data
+      )
 
-      return res.status(response.status).json({
-        error: 'TEFTE AI could not process the request.',
-      })
+      return res
+        .status(response.status)
+        .json({
+          error:
+            'TEFTE AI could not process the request.',
+        })
     }
 
-    const content = data.choices?.[0]?.message?.content
+    const content =
+      data.choices?.[0]?.message?.content
 
     if (!content) {
-      throw new Error('AI returned an empty response')
+      throw new Error(
+        'AI returned an empty response'
+      )
     }
 
     const cleanedContent = content
@@ -115,47 +309,75 @@ ${JSON.stringify(products, null, 2)}
       .replace(/```/g, '')
       .trim()
 
-    const aiResult = JSON.parse(cleanedContent)
+    const aiResult =
+      JSON.parse(cleanedContent)
 
-    const requestedIds = Array.isArray(aiResult.productIds)
-      ? aiResult.productIds
-      : []
+    const requestedIds =
+      Array.isArray(aiResult.productIds)
+        ? aiResult.productIds
+        : []
 
-    const matchedProducts = requestedIds
-      .map((id) => products.find((product) => product.id === id))
-      .filter(Boolean)
-      .slice(0, 3)
+    const allProducts =
+      getAllProducts()
+
+    const matchedProducts =
+      requestedIds
+        .map((id) =>
+          allProducts.find(
+            (product) =>
+              product.id === id
+          )
+        )
+        .filter(Boolean)
+        .slice(0, 3)
 
     res.json({
       summary:
-        typeof aiResult.summary === 'string'
+        typeof aiResult.summary ===
+        'string'
           ? aiResult.summary
           : '',
+
       products: matchedProducts,
     })
   } catch (error) {
-    console.error('Search error:', error)
+    console.error(
+      'Search error:',
+      error
+    )
 
     res.status(500).json({
-      error: 'TEFTE AI could not process the request.',
+      error:
+        'TEFTE AI could not process the request.',
     })
   }
 })
 
+// Analyze a product photo with TEFTE AI.
 app.post(
   '/api/analyze-product',
   upload.single('image'),
+
   async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
-        error: 'Product image is required.',
+        error:
+          'Product image is required.',
       })
     }
 
     try {
-      const mimeType = req.file.mimetype || 'image/jpeg'
-      const base64Image = req.file.buffer.toString('base64')
-      const dataUrl = `data:${mimeType};base64,${base64Image}`
+      const mimeType =
+        req.file.mimetype ||
+        'image/jpeg'
+
+      const base64Image =
+        req.file.buffer.toString(
+          'base64'
+        )
+
+      const dataUrl =
+        `data:${mimeType};base64,${base64Image}`
 
       console.log(
         `Analyzing product image: ${req.file.originalname} (${Math.round(
@@ -167,15 +389,23 @@ app.post(
         'https://openrouter.ai/api/v1/chat/completions',
         {
           method: 'POST',
+
           headers: {
-            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
+            Authorization:
+              `Bearer ${process.env.OPENROUTER_API_KEY}`,
+
+            'Content-Type':
+              'application/json',
           },
+
           body: JSON.stringify({
-            model: 'openrouter/free',
+            model:
+              'openrouter/free',
+
             messages: [
               {
                 role: 'system',
+
                 content: `
 You are TEFTE AI, an assistant that helps people create marketplace listings from photos.
 
@@ -225,15 +455,22 @@ Use exactly this structure:
 }
                 `,
               },
+
               {
                 role: 'user',
+
                 content: [
                   {
                     type: 'text',
-                    text: 'Create a TEFTE marketplace listing draft for the main item in this photo.',
+
+                    text:
+                      'Create a TEFTE marketplace listing draft for the main item in this photo.',
                   },
+
                   {
-                    type: 'image_url',
+                    type:
+                      'image_url',
+
                     image_url: {
                       url: dataUrl,
                     },
@@ -245,28 +482,46 @@ Use exactly this structure:
         }
       )
 
-      const data = await response.json()
+      const data =
+        await response.json()
 
       if (!response.ok) {
-        console.error('OpenRouter vision error:', data)
+        console.error(
+          'OpenRouter vision error:',
+          data
+        )
 
-        return res.status(response.status).json({
-          error: 'TEFTE AI could not analyze the image.',
-        })
+        return res
+          .status(response.status)
+          .json({
+            error:
+              'TEFTE AI could not analyze the image.',
+          })
       }
 
-      const content = data.choices?.[0]?.message?.content
+      const content =
+        data.choices?.[0]
+          ?.message?.content
 
       if (!content) {
-        throw new Error('Vision AI returned an empty response')
+        throw new Error(
+          'Vision AI returned an empty response'
+        )
       }
 
-      const cleanedContent = content
-        .replace(/```json/gi, '')
-        .replace(/```/g, '')
-        .trim()
+      const cleanedContent =
+        content
+          .replace(
+            /```json/gi,
+            ''
+          )
+          .replace(/```/g, '')
+          .trim()
 
-      const aiResult = JSON.parse(cleanedContent)
+      const aiResult =
+        JSON.parse(
+          cleanedContent
+        )
 
       const allowedCategories = [
         'Electronics',
@@ -287,49 +542,80 @@ Use exactly this structure:
         'Fair',
       ]
 
-      const suggestedPrice = Number(aiResult.suggestedPrice)
+      const suggestedPrice =
+        Number(
+          aiResult.suggestedPrice
+        )
 
       const listing = {
         title:
-          typeof aiResult.title === 'string'
+          typeof aiResult.title ===
+          'string'
             ? aiResult.title.trim()
             : 'Untitled item',
 
-        category: allowedCategories.includes(aiResult.category)
-          ? aiResult.category
-          : 'Other',
+        category:
+          allowedCategories.includes(
+            aiResult.category
+          )
+            ? aiResult.category
+            : 'Other',
 
-        condition: allowedConditions.includes(aiResult.condition)
-          ? aiResult.condition
-          : 'Good',
+        condition:
+          allowedConditions.includes(
+            aiResult.condition
+          )
+            ? aiResult.condition
+            : 'Good',
 
         description:
-          typeof aiResult.description === 'string'
+          typeof aiResult.description ===
+          'string'
             ? aiResult.description.trim()
             : '',
 
         suggestedPrice:
-          Number.isFinite(suggestedPrice) && suggestedPrice >= 0
+          Number.isFinite(
+            suggestedPrice
+          ) &&
+          suggestedPrice >= 0
             ? suggestedPrice
             : 0,
       }
 
-      console.log('TEFTE AI listing:', listing)
+      console.log(
+        'TEFTE AI listing:',
+        listing
+      )
 
       res.json({
         listing,
       })
     } catch (error) {
-      console.error('Vision analysis error:', error)
+      console.error(
+        'Vision analysis error:',
+        error
+      )
 
       res.status(500).json({
-        error: 'TEFTE AI could not analyze the image.',
+        error:
+          'TEFTE AI could not analyze the image.',
       })
     }
   }
 )
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`TEFTE AI server running on port ${PORT}`)
-  console.log(`Loaded ${products.length} products`)
-})
+app.listen(
+  PORT,
+  '0.0.0.0',
+  () => {
+    console.log(
+      `TEFTE AI server running on port ${PORT}`
+    )
+
+    console.log(
+      `Loaded ${products.length} products`
+    )
+  }
+)
+
