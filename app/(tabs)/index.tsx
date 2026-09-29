@@ -125,20 +125,23 @@ export default function HomeScreen() {
     try {
       setLoadingRecommended(true)
 
-      const data = await searchProducts(
-        'Show me a selection of popular products from different categories.'
-      )
+      const response = await fetch(`${API_URL}/api/products`)
 
-      setRecommended(
-        Array.isArray(data?.products) ? data.products.slice(0, 6) : []
-      )
+      if (!response.ok) {
+        throw new Error('Could not load products')
+      }
+
+      const data = await response.json()
+      const catalog = Array.isArray(data) ? data : []
+
+      setRecommended(catalog.slice(0, 6))
     } catch (error) {
       console.error('Recommended products error:', error)
+      setRecommended([])
     } finally {
       setLoadingRecommended(false)
     }
   }
-
   useEffect(() => {
     loadRecommended()
   }, [])
@@ -877,3 +880,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 })
+
