@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 
-const API_URL = 'http://192.168.68.52:3000'
+const API_URL = 'http://192.168.68.55:3000'
 
 type Product = {
   id: string
@@ -323,7 +323,7 @@ export default function HomeScreen() {
                         {product.price} {product.currency}
                       </Text>
 
-                      <Text style={styles.arrow}>→</Text>
+                      <Text style={styles.arrow}>в†’</Text>
                     </View>
                   </View>
                 </Pressable>

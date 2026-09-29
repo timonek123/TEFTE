@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import {
   Alert,
   Image,
@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 
-const API_URL = 'http://192.168.68.52:3000'
+const API_URL = 'http://192.168.68.55:3000'
 const MAX_PHOTOS = 8
 
 type Listing = {
@@ -431,7 +431,7 @@ export default function SellScreen() {
                     <Text
                       style={styles.removeButtonText}
                     >
-                      ×
+                      Г—
                     </Text>
                   </Pressable>
                 </View>
