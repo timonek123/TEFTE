@@ -64,3 +64,12 @@ sell-before-multiphoto-2.tsx
 home-before-images.tsx
 
 search-before-catalog.tsx
+
+profile-before-marketplace.tsx
+
+profile-before-listing-controls.tsx
+
+server/index-before-listing-management.js
+
+profile-before-edit-photos-ui.tsx
+server/index-before-edit-photos.js

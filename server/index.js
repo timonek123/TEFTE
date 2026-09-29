@@ -1,4 +1,4 @@
-﻿require('dotenv').config()
+require('dotenv').config()
 
 const express = require('express')
 const multer = require('multer')
@@ -205,6 +205,163 @@ app.post(
   }
 )
 
+// Update a TEFTE user listing.
+app.patch(
+  '/api/products/:id',
+  uploadListing.array('images', 8),
+  (req, res) => {
+  const index = userProducts.findIndex(
+    (product) => product.id === req.params.id
+  )
+
+  if (index === -1) {
+    return res.status(404).json({
+      error: 'Listing not found.',
+    })
+  }
+
+  const product = userProducts[index]
+
+  const {
+    title,
+    category,
+    condition,
+    description,
+    price,
+    status,
+  } = req.body
+
+  if (typeof title === 'string' && title.trim()) {
+    product.title = title.trim()
+  }
+
+  if (typeof category === 'string' && category.trim()) {
+    product.category = category.trim()
+  }
+
+  if (typeof condition === 'string' && condition.trim()) {
+    product.condition = condition.trim()
+  }
+
+  if (typeof description === 'string') {
+    product.description = description.trim()
+  }
+
+  if (price !== undefined) {
+    const numericPrice = Number(price)
+
+    if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+      return res.status(400).json({
+        error: 'Valid product price is required.',
+      })
+    }
+
+    product.price = numericPrice
+  }
+
+  if (status !== undefined) {
+    if (!['active', 'sold'].includes(status)) {
+      return res.status(400).json({
+        error: 'Status must be active or sold.',
+      })
+    }
+
+    product.status = status
+  }
+
+  // Photo editing.
+  // existingImages contains the old photos that the app wants to keep,
+  // already arranged in the desired order.
+  if (req.body.existingImages !== undefined || (req.files && req.files.length)) {
+    let existingImages = []
+
+    if (req.body.existingImages) {
+      try {
+        const parsedImages = JSON.parse(req.body.existingImages)
+
+        if (Array.isArray(parsedImages)) {
+          existingImages = parsedImages.filter(
+            (image) =>
+              typeof image === 'string' &&
+              image.startsWith('/uploads/')
+          )
+        }
+      } catch (error) {
+        return res.status(400).json({
+          error: 'Invalid existingImages data.',
+        })
+      }
+    }
+
+    const newImages = Array.isArray(req.files)
+      ? req.files.map(
+          (file) => `/uploads/${file.filename}`
+        )
+      : []
+
+    const imageUrls = [
+      ...existingImages,
+      ...newImages,
+    ].slice(0, 8)
+
+    if (imageUrls.length === 0) {
+      return res.status(400).json({
+        error: 'A listing must have at least one photo.',
+      })
+    }
+
+    product.imageUrls = imageUrls
+    product.imageUrl = imageUrls[0]
+  }
+
+  try {
+    saveUserProducts()
+  } catch (error) {
+    console.error('Could not update TEFTE listing:', error)
+
+    return res.status(500).json({
+      error: 'Could not update the listing.',
+    })
+  }
+
+  res.json({
+    message: 'Listing updated successfully.',
+    product,
+  })
+  }
+)
+
+// Delete a TEFTE user listing.
+app.delete('/api/products/:id', (req, res) => {
+  const index = userProducts.findIndex(
+    (product) => product.id === req.params.id
+  )
+
+  if (index === -1) {
+    return res.status(404).json({
+      error: 'Listing not found.',
+    })
+  }
+
+  const [deletedProduct] = userProducts.splice(index, 1)
+
+  try {
+    saveUserProducts()
+  } catch (error) {
+    userProducts.splice(index, 0, deletedProduct)
+
+    console.error('Could not delete TEFTE listing:', error)
+
+    return res.status(500).json({
+      error: 'Could not delete the listing.',
+    })
+  }
+
+  res.json({
+    message: 'Listing deleted successfully.',
+    product: deletedProduct,
+  })
+})
 // Ask TEFTE AI product search.
 app.post('/api/search', async (req, res) => {
   const { query } = req.body
