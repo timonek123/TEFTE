@@ -425,7 +425,12 @@ export default function ProductScreen() {
 
           <Pressable
             style={styles.buyButton}
-            onPress={handleBuy}
+            onPress={() =>
+              router.push({
+                pathname: '/checkout/[id]',
+                params: { id: product.id },
+              })
+            }
           >
             <Text style={styles.buyButtonText}>
               Buy with Solana
@@ -677,6 +682,7 @@ const styles = StyleSheet.create({
     color: '#888888',
   },
 })
+
 
 
 

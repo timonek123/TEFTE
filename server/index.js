@@ -15,6 +15,11 @@ const CHAT_MESSAGES_FILE = path.join(
   'chat-messages.json'
 )
 
+const ORDERS_FILE = path.join(
+  __dirname,
+  'orders.json'
+)
+
 const UPLOADS_DIR = path.join(__dirname, 'uploads')
 
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -79,6 +84,46 @@ function loadChatMessages() {
   }
 }
 
+function loadOrders() {
+  try {
+    if (!fs.existsSync(ORDERS_FILE)) {
+      fs.writeFileSync(
+        ORDERS_FILE,
+        '[]',
+        'utf8'
+      )
+
+      return []
+    }
+
+    const raw = fs
+      .readFileSync(ORDERS_FILE, 'utf8')
+      .replace(/^\uFEFF/, '')
+      .trim()
+
+    if (!raw) {
+      return []
+    }
+
+    const parsed = JSON.parse(raw)
+
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.error(
+      'Could not load orders.json:',
+      error
+    )
+
+    return []
+  }
+}
+function saveOrders() {
+  fs.writeFileSync(
+    ORDERS_FILE,
+    JSON.stringify(orders, null, 2),
+    'utf8'
+  )
+}
 function saveChatMessages() {
   fs.writeFileSync(
     CHAT_MESSAGES_FILE,
@@ -96,6 +141,7 @@ function saveUserProducts() {
 
 const userProducts = loadUserProducts()
 const chatMessages = loadChatMessages()
+const orders = loadOrders()
 
 function getAllProducts() {
   return [...userProducts, ...products]
@@ -964,6 +1010,235 @@ Use exactly this structure:
   }
 )
 
+// Create a new marketplace order after payment.
+app.post('/api/orders', (req, res) => {
+  try {
+    const {
+      productId,
+      buyer,
+      seller,
+      paymentMethod,
+      transactionSignature,
+    } = req.body
+
+    if (!productId) {
+      return res.status(400).json({
+        error: 'productId is required',
+      })
+    }
+
+    const product = getAllProducts().find(
+      (item) => item.id === productId
+    )
+
+    if (!product) {
+      return res.status(404).json({
+        error: 'Product not found',
+      })
+    }
+
+    const now = new Date().toISOString()
+
+    const order = {
+      id: `order-${Date.now()}`,
+      productId: product.id,
+      productTitle: product.title,
+      productPrice: product.price,
+      productCurrency: product.currency,
+      buyer: buyer || 'TEFTE buyer',
+      seller:
+        seller ||
+        product.seller ||
+        'TEFTE seller',
+      paymentMethod:
+        paymentMethod || 'SOL',
+      transactionSignature:
+        transactionSignature || null,
+      status: 'waiting_seller',
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    orders.unshift(order)
+    saveOrders()
+
+    console.log(
+      'TEFTE order created:',
+      order.id,
+      order.status
+    )
+
+    res.status(201).json({
+      order,
+    })
+  } catch (error) {
+    console.error(
+      'Could not create TEFTE order:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not create order',
+    })
+  }
+})
+// Seller confirms or declines a waiting order.
+app.patch('/api/orders/:orderId/seller-decision', (req, res) => {
+  try {
+    const { orderId } = req.params
+    const { decision } = req.body
+
+    const order = orders.find(
+      (item) => item.id === orderId
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        error: 'Order not found',
+      })
+    }
+
+    if (order.status !== 'waiting_seller') {
+      return res.status(409).json({
+        error:
+          'Seller decision is no longer available for this order',
+      })
+    }
+
+    if (
+      decision !== 'confirm' &&
+      decision !== 'decline'
+    ) {
+      return res.status(400).json({
+        error:
+          'decision must be confirm or decline',
+      })
+    }
+
+    order.status =
+      decision === 'confirm'
+        ? 'confirmed'
+        : 'declined_by_seller'
+
+    order.updatedAt =
+      new Date().toISOString()
+
+    saveOrders()
+
+    console.log(
+      'TEFTE seller decision:',
+      order.id,
+      order.status
+    )
+
+    res.json({
+      order,
+    })
+  } catch (error) {
+    console.error(
+      'Could not update seller decision:',
+      error
+    )
+
+    res.status(500).json({
+      error:
+        'Could not update seller decision',
+    })
+  }
+})
+// Buyer can cancel only before seller confirmation.
+app.patch('/api/orders/:orderId/buyer-cancel', (req, res) => {
+  try {
+    const { orderId } = req.params
+
+    const order = orders.find(
+      (item) => item.id === orderId
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        error: 'Order not found',
+      })
+    }
+
+    if (order.status !== 'waiting_seller') {
+      return res.status(409).json({
+        error:
+          'This order can no longer be cancelled by the buyer',
+      })
+    }
+
+    order.status = 'cancelled_by_buyer'
+    order.updatedAt =
+      new Date().toISOString()
+
+    saveOrders()
+
+    console.log(
+      'TEFTE buyer cancelled:',
+      order.id
+    )
+
+    res.json({
+      order,
+    })
+  } catch (error) {
+    console.error(
+      'Could not cancel TEFTE order:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not cancel order',
+    })
+  }
+})
+// Get all marketplace orders.
+app.get('/api/orders', (req, res) => {
+  try {
+    res.json({
+      orders,
+    })
+  } catch (error) {
+    console.error(
+      'TEFTE get orders error:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not load orders',
+    })
+  }
+})
+// Get one marketplace order.
+app.get('/api/orders/:orderId', (req, res) => {
+  try {
+    const { orderId } = req.params
+
+    const order = orders.find(
+      (item) => item.id === orderId
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        error: 'Order not found',
+      })
+    }
+
+    res.json({
+      order,
+    })
+  } catch (error) {
+    console.error(
+      'Could not load TEFTE order:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not load order',
+    })
+  }
+})
 app.listen(
   PORT,
   '0.0.0.0',
@@ -977,6 +1252,14 @@ app.listen(
     )
   }
 )
+
+
+
+
+
+
+
+
 
 
 

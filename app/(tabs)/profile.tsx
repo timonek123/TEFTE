@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+﻿import { useCallback, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -43,6 +43,29 @@ type Product = {
   imageUrls?: string[]
 }
 
+type OrderStatus =
+  | 'waiting_seller'
+  | 'confirmed'
+  | 'declined_by_seller'
+  | 'cancelled_by_buyer'
+  | 'shipped'
+  | 'received'
+  | 'completed'
+
+type Order = {
+  id: string
+  productId: string
+  productTitle: string
+  productPrice: number
+  productCurrency: string
+  buyer: string
+  seller: string
+  paymentMethod: string
+  transactionSignature?: string | null
+  status: OrderStatus
+  createdAt: string
+  updatedAt: string
+}
 function getProductImage(product: Product) {
   const rawImage =
     product.imageUrls?.find((image) => Boolean(image)) || product.imageUrl
@@ -75,6 +98,7 @@ export default function ProfileScreen() {
   const { account, connect } = useMobileWallet()
 
   const [products, setProducts] = useState<Product[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -89,6 +113,33 @@ export default function ProfileScreen() {
   const [savingEdit, setSavingEdit] = useState(false)
   const [editPhotos, setEditPhotos] = useState<EditPhoto[]>([])
 
+  const loadOrders = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `${API_URL}/api/orders`
+      )
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status}`
+        )
+      }
+
+      const data = await response.json()
+
+      const loadedOrders: Order[] =
+        Array.isArray(data?.orders)
+          ? data.orders
+          : []
+
+      setOrders(loadedOrders)
+    } catch (err) {
+      console.error(
+        'Profile orders error:',
+        err
+      )
+    }
+  }, [])
   const loadProducts = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) {
@@ -131,7 +182,8 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       loadProducts()
-    }, [loadProducts]),
+      loadOrders()
+    }, [loadProducts, loadOrders]),
   )
 
   const openEdit = (product: Product) => {
@@ -457,6 +509,21 @@ export default function ProfileScreen() {
   }
 
   const walletAddress = account?.address?.toString()
+  const myPurchases = orders.filter(
+    (order) =>
+      Boolean(walletAddress) &&
+      order.buyer === walletAddress,
+  )
+
+  const myProductIds = new Set(
+    products.map((product) => product.id),
+  )
+
+  const mySales = orders.filter(
+    (order) =>
+      myProductIds.has(order.productId),
+  )
+
   const activeCount = products.filter(
     (product) => (product.status || 'active') === 'active',
   ).length
@@ -553,7 +620,7 @@ export default function ProfileScreen() {
 
         <View style={styles.rewardCard}>
           <View style={styles.rewardIcon}>
-            <Text style={styles.rewardEmoji}>вњ¦</Text>
+            <Text style={styles.rewardEmoji}>РІСљВ¦</Text>
           </View>
 
           <View style={styles.rewardInfo}>
@@ -566,6 +633,165 @@ export default function ProfileScreen() {
           <Text style={styles.comingSoon}>Soon</Text>
         </View>
 
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>
+              My purchases
+            </Text>
+            <Text style={styles.sectionSubtitle}>
+              Orders you placed on TEFTE
+            </Text>
+          </View>
+
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>
+              {myPurchases.length}
+            </Text>
+          </View>
+        </View>
+
+        {myPurchases.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.stateTitle}>
+              No purchases yet
+            </Text>
+            <Text style={styles.stateText}>
+              Your TEFTE orders will appear here.
+            </Text>
+          </View>
+        ) : (
+          myPurchases.map((order) => (
+            <Pressable
+              key={order.id}
+              style={styles.orderCard}
+              onPress={() =>
+                router.push({
+                  pathname: '/order/[id]',
+                  params: {
+                    id: order.productId,
+                    orderId: order.id,
+                    signature:
+                      order.transactionSignature || '',
+                  },
+                })
+              }
+            >
+              <View style={styles.orderCardInfo}>
+                <Text
+                  style={styles.orderCardTitle}
+                  numberOfLines={2}
+                >
+                  {order.productTitle}
+                </Text>
+
+                <Text style={styles.orderCardPrice}>
+                  {order.productPrice}{' '}
+                  {order.productCurrency}
+                </Text>
+              </View>
+
+              <View style={styles.orderStatusBadge}>
+                <Text style={styles.orderStatusText}>
+                  {order.status === 'waiting_seller'
+                    ? 'Waiting for seller'
+                    : order.status === 'confirmed'
+                      ? 'Confirmed'
+                      : order.status ===
+                          'declined_by_seller'
+                        ? 'Declined'
+                        : order.status ===
+                            'cancelled_by_buyer'
+                          ? 'Cancelled'
+                          : order.status === 'shipped'
+                            ? 'Shipped'
+                            : order.status === 'received'
+                              ? 'Received'
+                              : 'Completed'}
+                </Text>
+              </View>
+            </Pressable>
+          ))
+        )}
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>
+              Sales
+            </Text>
+            <Text style={styles.sectionSubtitle}>
+              Orders placed on your listings
+            </Text>
+          </View>
+
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>
+              {mySales.length}
+            </Text>
+          </View>
+        </View>
+
+        {mySales.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.stateTitle}>
+              No sales yet
+            </Text>
+            <Text style={styles.stateText}>
+              Buyer orders for your listings will appear here.
+            </Text>
+          </View>
+        ) : (
+          mySales.map((order) => (
+            <Pressable
+              key={order.id}
+              style={styles.orderCard}
+              onPress={() =>
+                router.push({
+                  pathname: '/order/[id]',
+                  params: {
+                    id: order.productId,
+                    orderId: order.id,
+                    signature:
+                      order.transactionSignature || '',
+                    role: 'seller',
+                  },
+                })
+              }
+            >
+              <View style={styles.orderCardInfo}>
+                <Text
+                  style={styles.orderCardTitle}
+                  numberOfLines={2}
+                >
+                  {order.productTitle}
+                </Text>
+
+                <Text style={styles.orderCardPrice}>
+                  {order.productPrice}{' '}
+                  {order.productCurrency}
+                </Text>
+              </View>
+
+              <View style={styles.orderStatusBadge}>
+                <Text style={styles.orderStatusText}>
+                  {order.status === 'waiting_seller'
+                    ? 'Action needed'
+                    : order.status === 'confirmed'
+                      ? 'Confirmed'
+                      : order.status ===
+                          'declined_by_seller'
+                        ? 'Declined'
+                        : order.status ===
+                            'cancelled_by_buyer'
+                          ? 'Cancelled'
+                          : order.status === 'shipped'
+                            ? 'Shipped'
+                            : order.status === 'received'
+                              ? 'Received'
+                              : 'Completed'}
+                </Text>
+              </View>
+            </Pressable>
+          ))
+        )}
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>My Listings</Text>
@@ -600,7 +826,7 @@ export default function ProfileScreen() {
           </View>
         ) : products.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>рџ“¦</Text>
+            <Text style={styles.emptyEmoji}>СЂСџвЂњВ¦</Text>
             <Text style={styles.emptyTitle}>No listings yet</Text>
             <Text style={styles.emptyText}>
               Take a few photos and let TEFTE AI help create your first
@@ -685,7 +911,7 @@ export default function ProfileScreen() {
                       <Text style={styles.productMeta} numberOfLines={1}>
                         {[product.category, product.condition]
                           .filter(Boolean)
-                          .join(' В· ')}
+                          .join(' Р’В· ')}
                       </Text>
 
                       <View style={styles.productBottom}>
@@ -693,7 +919,7 @@ export default function ProfileScreen() {
                           {product.price} {product.currency || 'USDC'}
                         </Text>
 
-                        <Text style={styles.arrow}>в†’</Text>
+                        <Text style={styles.arrow}>РІвЂ вЂ™</Text>
                       </View>
                     </View>
                   </Pressable>
@@ -934,6 +1160,48 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  orderCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  orderCardInfo: {
+    flex: 1,
+  },
+
+  orderCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111111',
+    marginBottom: 5,
+  },
+
+  orderCardPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555555',
+  },
+
+  orderStatusBadge: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+
+  orderStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#444444',
+  },
   screen: {
     flex: 1,
     backgroundColor: '#F7F7F5',
@@ -1660,3 +1928,13 @@ const styles = StyleSheet.create({
     height: 30,
   },
 })
+
+
+
+
+
+
+
+
+
+
