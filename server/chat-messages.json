@@ -1,0 +1,59 @@
+[
+  {
+    "id": "message-1790675173484",
+    "chatId": "demo-samsung",
+    "text": "TEFTE edit test works!",
+    "sender": "me",
+    "time": "2026-09-29T09:46:13.484Z",
+    "edited": true
+  },
+  {
+    "id": "message-1790770615528",
+    "chatId": "demo-samsung",
+    "text": "1",
+    "sender": "me",
+    "time": "2026-09-30T12:16:55.528Z"
+  },
+  {
+    "id": "message-1790770617873",
+    "chatId": "demo-samsung",
+    "text": "2",
+    "sender": "me",
+    "time": "2026-09-30T12:16:57.873Z"
+  },
+  {
+    "id": "message-1790770619828",
+    "chatId": "demo-samsung",
+    "text": "3",
+    "sender": "me",
+    "time": "2026-09-30T12:16:59.828Z"
+  },
+  {
+    "id": "message-1790770622566",
+    "chatId": "demo-samsung",
+    "text": "4",
+    "sender": "me",
+    "time": "2026-09-30T12:17:02.566Z"
+  },
+  {
+    "id": "message-1790770624245",
+    "chatId": "demo-samsung",
+    "text": "5",
+    "sender": "me",
+    "time": "2026-09-30T12:17:04.245Z"
+  },
+  {
+    "id": "message-1790770625843",
+    "chatId": "demo-samsung",
+    "text": "6",
+    "sender": "me",
+    "time": "2026-09-30T12:17:05.843Z"
+  },
+  {
+    "id": "message-1790770656787",
+    "chatId": "demo-samsung",
+    "text": "7",
+    "sender": "me",
+    "time": "2026-09-30T12:17:36.787Z"
+  }
+]

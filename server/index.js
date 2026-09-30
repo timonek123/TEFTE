@@ -1,4 +1,4 @@
-require('dotenv').config()
+﻿require('dotenv').config()
 
 const express = require('express')
 const multer = require('multer')
@@ -10,6 +10,11 @@ const app = express()
 const PORT = 3000
 
 const USER_PRODUCTS_FILE = path.join(__dirname, 'user-products.json')
+const CHAT_MESSAGES_FILE = path.join(
+  __dirname,
+  'chat-messages.json'
+)
+
 const UPLOADS_DIR = path.join(__dirname, 'uploads')
 
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -40,6 +45,47 @@ function loadUserProducts() {
   }
 }
 
+function loadChatMessages() {
+  try {
+    if (!fs.existsSync(CHAT_MESSAGES_FILE)) {
+      fs.writeFileSync(
+        CHAT_MESSAGES_FILE,
+        '[]',
+        'utf8'
+      )
+
+      return []
+    }
+
+    const raw = fs
+      .readFileSync(CHAT_MESSAGES_FILE, 'utf8')
+      .replace(/^\uFEFF/, '')
+      .trim()
+
+    if (!raw) {
+      return []
+    }
+
+    const parsed = JSON.parse(raw)
+
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.error(
+      'Could not load chat-messages.json:',
+      error
+    )
+
+    return []
+  }
+}
+
+function saveChatMessages() {
+  fs.writeFileSync(
+    CHAT_MESSAGES_FILE,
+    JSON.stringify(chatMessages, null, 2),
+    'utf8'
+  )
+}
 function saveUserProducts() {
   fs.writeFileSync(
     USER_PRODUCTS_FILE,
@@ -49,6 +95,7 @@ function saveUserProducts() {
 }
 
 const userProducts = loadUserProducts()
+const chatMessages = loadChatMessages()
 
 function getAllProducts() {
   return [...userProducts, ...products]
@@ -99,6 +146,161 @@ app.get('/', (req, res) => {
   })
 })
 
+// Get messages for a TEFTE chat.
+app.get('/api/chats/:chatId/messages', (req, res) => {
+  const messages = chatMessages.filter(
+    (message) => message.chatId === req.params.chatId
+  )
+
+  res.json({
+    messages,
+  })
+})
+// Add a message to a TEFTE chat.
+app.post('/api/chats/:chatId/messages', (req, res) => {
+  const { text, sender } = req.body
+
+  if (
+    typeof text !== 'string' ||
+    !text.trim()
+  ) {
+    return res.status(400).json({
+      error: 'Message text is required.',
+    })
+  }
+
+  const message = {
+    id: `message-${Date.now()}`,
+    chatId: req.params.chatId,
+    text: text.trim(),
+    sender:
+      typeof sender === 'string' &&
+      sender.trim()
+        ? sender.trim()
+        : 'me',
+    time: new Date().toISOString(),
+  }
+
+  chatMessages.push(message)
+
+  try {
+    saveChatMessages()
+  } catch (error) {
+    chatMessages.pop()
+
+    console.error(
+      'Could not save TEFTE chat message:',
+      error
+    )
+
+    return res.status(500).json({
+      error: 'Could not save the message.',
+    })
+  }
+
+  res.status(201).json({
+    message: 'Message sent successfully.',
+    data: message,
+  })
+})
+// Edit a TEFTE chat message.
+app.patch('/api/chats/:chatId/messages/:messageId', (req, res) => {
+  const { text } = req.body
+
+  if (
+    typeof text !== 'string' ||
+    !text.trim()
+  ) {
+    return res.status(400).json({
+      error: 'Message text is required.',
+    })
+  }
+
+  const messageIndex = chatMessages.findIndex(
+    (message) =>
+      message.chatId === req.params.chatId &&
+      message.id === req.params.messageId
+  )
+
+  if (messageIndex === -1) {
+    return res.status(404).json({
+      error: 'Message not found.',
+    })
+  }
+
+  const previousMessage = {
+    ...chatMessages[messageIndex],
+  }
+
+  chatMessages[messageIndex] = {
+    ...chatMessages[messageIndex],
+    text: text.trim(),
+    edited: true,
+  }
+
+  try {
+    saveChatMessages()
+  } catch (error) {
+    chatMessages[messageIndex] = previousMessage
+
+    console.error(
+      'Could not edit TEFTE chat message:',
+      error
+    )
+
+    return res.status(500).json({
+      error: 'Could not edit the message.',
+    })
+  }
+
+  res.json({
+    message: 'Message edited successfully.',
+    data: chatMessages[messageIndex],
+  })
+})
+
+// Delete a TEFTE chat message.
+app.delete('/api/chats/:chatId/messages/:messageId', (req, res) => {
+  const messageIndex = chatMessages.findIndex(
+    (message) =>
+      message.chatId === req.params.chatId &&
+      message.id === req.params.messageId
+  )
+
+  if (messageIndex === -1) {
+    return res.status(404).json({
+      error: 'Message not found.',
+    })
+  }
+
+  const deletedMessage = chatMessages[messageIndex]
+
+  chatMessages.splice(messageIndex, 1)
+
+  try {
+    saveChatMessages()
+  } catch (error) {
+    chatMessages.splice(
+      messageIndex,
+      0,
+      deletedMessage
+    )
+
+    console.error(
+      'Could not delete TEFTE chat message:',
+      error
+    )
+
+    return res.status(500).json({
+      error: 'Could not delete the message.',
+    })
+  }
+
+  res.json({
+    message: 'Message deleted successfully.',
+    data: deletedMessage,
+  })
+})
 app.get('/api/products', (req, res) => {
   res.json(getAllProducts())
 })
@@ -775,4 +977,8 @@ app.listen(
     )
   }
 )
+
+
+
+
 

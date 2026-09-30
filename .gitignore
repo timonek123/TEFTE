@@ -75,3 +75,11 @@ profile-before-edit-photos-ui.tsx
 server/index-before-edit-photos.js
 
 home-before-recommended-fallback.tsx
+add-chat-edit-delete.js
+chat-before-autoscroll.tsx
+chat-before-dynamic-messages.tsx
+chat-before-edit-delete.tsx
+chat-before-messages.tsx
+product-before-message-seller.tsx
+server/index-before-chat-storage.js
+server/index-before-message-edit-delete.js

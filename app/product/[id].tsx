@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+﻿import React, { useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import {
@@ -141,6 +141,23 @@ export default function ProductScreen() {
     setActiveImageIndex(nextIndex)
   }
 
+  function handleMessageSeller() {
+    if (!product) {
+      return
+    }
+
+    const chatId =
+      product.id === 'user-1790605722969'
+        ? 'demo-samsung'
+        : product.id === 'user-1790667942743'
+          ? 'demo-snow-globe'
+          : 'demo-samsung'
+
+    router.push({
+      pathname: '/chat/[id]',
+      params: { id: chatId },
+    })
+  }
   async function handleBuy() {
     if (!account) {
       console.error(
@@ -398,19 +415,23 @@ export default function ProductScreen() {
           </Text>
 
           <Pressable
+            style={styles.messageSellerButton}
+            onPress={handleMessageSeller}
+          >
+            <Text style={styles.messageSellerButtonText}>
+              Message seller
+            </Text>
+          </Pressable>
+
+          <Pressable
             style={styles.buyButton}
             onPress={handleBuy}
           >
-            <Text
-              style={
-                styles.buyButtonText
-              }
-            >
+            <Text style={styles.buyButtonText}>
               Buy with Solana
             </Text>
           </Pressable>
         </View>
-
         <Text style={styles.caption}>
           AI-powered marketplace on
           Solana
@@ -620,6 +641,21 @@ const styles = StyleSheet.create({
     color: '#777777',
   },
 
+  messageSellerButton: {
+    marginTop: 20,
+    borderWidth: 1.5,
+    borderColor: '#111111',
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+
+  messageSellerButtonText: {
+    color: '#111111',
+    fontSize: 16,
+    fontWeight: '800',
+  },
   buyButton: {
     marginTop: 20,
     backgroundColor: '#111111',
@@ -641,3 +677,6 @@ const styles = StyleSheet.create({
     color: '#888888',
   },
 })
+
+
+
