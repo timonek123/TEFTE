@@ -56,6 +56,7 @@ export default function OrderScreen() {
       id: string
       orderId?: string
       signature?: string
+      reward?: string
       role?: string
     }>()
 
@@ -75,6 +76,12 @@ export default function OrderScreen() {
     : params.role
 
   const isSeller = role === 'seller'
+  const reward = Array.isArray(params.reward)
+    ? params.reward[0]
+    : params.reward
+
+  const isSkrDemoReward =
+    reward === 'skr-demo'
   const [order, setOrder] =
     useState<Order | null>(null)
   const sellerConfirmed =
@@ -515,6 +522,21 @@ export default function OrderScreen() {
           </View>
         </View>
 
+        {isSkrDemoReward ? (
+          <View style={styles.skrRewardCard}>
+            <Text style={styles.skrRewardLabel}>
+              SKR PURCHASE COMPLETE
+            </Text>
+
+            <Text style={styles.skrRewardXp}>
+              +100 TEFTE XP
+            </Text>
+
+            <Text style={styles.skrRewardText}>
+              1 Listing Boost earned
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.protectionCard}>
           <View style={styles.protectionHeader}>
             <View style={styles.shield}>
@@ -887,6 +909,32 @@ export default function OrderScreen() {
 }
 
 const styles = StyleSheet.create({
+  skrRewardCard: {
+    backgroundColor: '#F1EDFF',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
+  },
+
+  skrRewardLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#6547A8',
+    marginBottom: 6,
+  },
+
+  skrRewardXp: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#2F2450',
+    marginBottom: 4,
+  },
+
+  skrRewardText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5E5670',
+  },
   sellerActions: {
     gap: 10,
     marginTop: 4,
@@ -1239,6 +1287,9 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
 })
+
+
+
 
 
 

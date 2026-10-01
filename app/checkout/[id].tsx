@@ -151,7 +151,10 @@ export default function CheckoutScreen() {
       return
     }
 
-    if (paymentMethod !== 'SOL') {
+    if (
+      paymentMethod !== 'SOL' &&
+      paymentMethod !== 'SKR'
+    ) {
       return
     }
 
@@ -168,6 +171,48 @@ export default function CheckoutScreen() {
 
     try {
       setPaying(true)
+      if (paymentMethod === 'SKR') {
+        const transactionSignature =
+          `SKR-DEMO-${Date.now()}`
+
+        const orderResponse = await fetch(
+          `${API_URL}/api/orders`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              productId: product.id,
+              buyer: account.address,
+              seller: product.seller,
+              paymentMethod: 'SKR',
+              transactionSignature,
+            }),
+          }
+        )
+
+        if (!orderResponse.ok) {
+          throw new Error(
+            'TEFTE could not create the SKR demo order'
+          )
+        }
+
+        const orderResult =
+          await orderResponse.json()
+
+        router.replace({
+          pathname: '/order/[id]',
+          params: {
+            id: product.id,
+            orderId: orderResult.order.id,
+            signature: transactionSignature,
+            reward: 'skr-demo',
+          },
+        })
+
+        return
+      }
 
       const {
         context: { slot: minContextSlot },
@@ -432,7 +477,7 @@ export default function CheckoutScreen() {
               paymentMethod === method
 
             const available =
-              method === 'SOL'
+              method === 'SOL' || method === 'SKR'
 
             return (
               <Pressable
@@ -474,10 +519,10 @@ export default function CheckoutScreen() {
                       styles.methodDescription
                     }
                   >
-                    {available
-                      ? 'Available now'
-                      : method === 'SKR'
-                        ? 'SKR rewards В· Demo preview'
+                    {method === 'SKR'
+                      ? 'SKR rewards - Demo preview'
+                      : available
+                        ? 'Available now'
                         : 'Coming next'}
                   </Text>
                 </View>
@@ -569,10 +614,16 @@ export default function CheckoutScreen() {
 
         <Pressable
           onPress={continueToPayment}
-          disabled={paymentMethod !== 'SOL' || paying}
+          disabled={
+            (paymentMethod !== 'SOL' &&
+              paymentMethod !== 'SKR') ||
+            paying
+          }
           style={[
             styles.payButton,
-            (paymentMethod !== 'SOL' || paying) &&
+            ((paymentMethod !== 'SOL' &&
+              paymentMethod !== 'SKR') ||
+              paying) &&
               styles.payButtonDisabled,
           ]}
         >
@@ -582,7 +633,9 @@ export default function CheckoutScreen() {
                 ? 'Processing...'
                 : 'Continue with SOL'
               : paymentMethod === 'SKR'
-                ? 'SKR demo coming next'
+                ? paying
+                  ? 'Processing...'
+                  : 'Demo purchase with SKR'
                 : `${paymentMethod} coming next`}
           </Text>
         </Pressable>
@@ -964,6 +1017,9 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
 })
+
+
+
 
 
 
