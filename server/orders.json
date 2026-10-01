@@ -9,9 +9,9 @@
     "seller": "crypton.skr",
     "paymentMethod": "SOL",
     "transactionSignature": "SELLER-FLOW-DEMO",
-    "status": "waiting_seller",
+    "status": "completed",
     "createdAt": "2026-09-30T18:49:08.097Z",
-    "updatedAt": "2026-09-30T18:49:08.097Z"
+    "updatedAt": "2026-10-01T12:28:24.829Z"
   },
   {
     "id": "order-1790784603175",

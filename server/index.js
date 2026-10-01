@@ -1146,6 +1146,147 @@ app.patch('/api/orders/:orderId/seller-decision', (req, res) => {
     })
   }
 })
+// Seller can mark an accepted order as shipped.
+app.patch('/api/orders/:orderId/seller-ship', (req, res) => {
+  try {
+    const { orderId } = req.params
+
+    const order = orders.find(
+      (item) => item.id === orderId
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        error: 'Order not found',
+      })
+    }
+
+    if (order.status !== 'confirmed') {
+      return res.status(409).json({
+        error:
+          'Only a confirmed order can be marked as shipped',
+      })
+    }
+
+    order.status = 'shipped'
+    order.updatedAt =
+      new Date().toISOString()
+
+    saveOrders()
+
+    console.log(
+      'TEFTE order shipped:',
+      order.id
+    )
+
+    res.json({
+      order,
+    })
+  } catch (error) {
+    console.error(
+      'Could not mark TEFTE order as shipped:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not mark order as shipped',
+    })
+  }
+})
+// Buyer confirms delivery after the seller shipped the order.
+app.patch('/api/orders/:orderId/buyer-received', (req, res) => {
+  try {
+    const { orderId } = req.params
+
+    const order = orders.find(
+      (item) => item.id === orderId
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        error: 'Order not found',
+      })
+    }
+
+    if (order.status !== 'shipped') {
+      return res.status(409).json({
+        error:
+          'Only a shipped order can be confirmed as received',
+      })
+    }
+
+    order.status = 'received'
+    order.updatedAt =
+      new Date().toISOString()
+
+    saveOrders()
+
+    console.log(
+      'TEFTE order received:',
+      order.id
+    )
+
+    res.json({
+      order,
+    })
+  } catch (error) {
+    console.error(
+      'Could not confirm TEFTE delivery:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not confirm delivery',
+    })
+  }
+})
+// Complete the TEFTE workflow after delivery is confirmed.
+app.patch('/api/orders/:orderId/complete', (req, res) => {
+  try {
+    const { orderId } = req.params
+
+    const order = orders.find(
+      (item) => item.id === orderId
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        error: 'Order not found',
+      })
+    }
+
+    if (order.status !== 'received') {
+      return res.status(409).json({
+        error:
+          'Only a received order can be completed',
+      })
+    }
+
+    order.status = 'completed'
+    order.updatedAt =
+      new Date().toISOString()
+
+    saveOrders()
+
+    console.log(
+      'TEFTE order completed:',
+      order.id
+    )
+
+    res.json({
+      order,
+    })
+  } catch (error) {
+    console.error(
+      'Could not complete TEFTE order:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not complete order',
+    })
+  }
+})
 // Buyer can cancel only before seller confirmation.
 app.patch('/api/orders/:orderId/buyer-cancel', (req, res) => {
   try {
@@ -1252,6 +1393,11 @@ app.listen(
     )
   }
 )
+
+
+
+
+
 
 
 

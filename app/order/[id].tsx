@@ -77,6 +77,23 @@ export default function OrderScreen() {
   const isSeller = role === 'seller'
   const [order, setOrder] =
     useState<Order | null>(null)
+  const sellerConfirmed =
+    order?.status === 'confirmed' ||
+    order?.status === 'shipped' ||
+    order?.status === 'received' ||
+    order?.status === 'completed'
+
+  const orderShipped =
+    order?.status === 'shipped' ||
+    order?.status === 'received' ||
+    order?.status === 'completed'
+
+  const orderReceived =
+    order?.status === 'received' ||
+    order?.status === 'completed'
+
+  const orderCompleted =
+    order?.status === 'completed'
   const [product, setProduct] =
     useState<Product | null>(null)
 
@@ -85,6 +102,12 @@ export default function OrderScreen() {
   const [cancelling, setCancelling] =
     useState(false)
   const [sellerDeciding, setSellerDeciding] =
+    useState(false)
+  const [shipping, setShipping] =
+    useState(false)
+  const [receiving, setReceiving] =
+    useState(false)
+  const [completing, setCompleting] =
     useState(false)
 
   useEffect(() => {
@@ -221,6 +244,128 @@ export default function OrderScreen() {
       )
     } finally {
       setSellerDeciding(false)
+    }
+  }
+  async function markAsShipped() {
+    if (
+      !orderId ||
+      order?.status !== 'confirmed' ||
+      !isSeller
+    ) {
+      return
+    }
+
+    try {
+      setShipping(true)
+
+      const response = await fetch(
+        `${API_URL}/api/orders/${orderId}/seller-ship`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          result?.error ||
+            'Could not mark order as shipped'
+        )
+      }
+
+      setOrder(result.order)
+    } catch (error) {
+      console.error(
+        'TEFTE shipping error:',
+        error
+      )
+    } finally {
+      setShipping(false)
+    }
+  }
+  async function confirmReceived() {
+    if (
+      !orderId ||
+      order?.status !== 'shipped' ||
+      isSeller
+    ) {
+      return
+    }
+
+    try {
+      setReceiving(true)
+
+      const response = await fetch(
+        `${API_URL}/api/orders/${orderId}/buyer-received`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          result?.error ||
+            'Could not confirm delivery'
+        )
+      }
+
+      setOrder(result.order)
+    } catch (error) {
+      console.error(
+        'TEFTE confirm received error:',
+        error
+      )
+    } finally {
+      setReceiving(false)
+    }
+  }
+  async function completeOrder() {
+    if (
+      !orderId ||
+      order?.status !== 'received'
+    ) {
+      return
+    }
+
+    try {
+      setCompleting(true)
+
+      const response = await fetch(
+        `${API_URL}/api/orders/${orderId}/complete`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          result?.error ||
+            'Could not complete order'
+        )
+      }
+
+      setOrder(result.order)
+    } catch (error) {
+      console.error(
+        'TEFTE complete order error:',
+        error
+      )
+    } finally {
+      setCompleting(false)
     }
   }
   function getImageUrl(
@@ -429,54 +574,53 @@ export default function OrderScreen() {
             <View
               style={[
                 styles.stepCircle,
-                order?.status === 'waiting_seller' &&
+                (sellerConfirmed ||
+                  order?.status === 'waiting_seller') &&
                   styles.stepCircleActive,
               ]}
             >
               <Text
                 style={
+                  sellerConfirmed ||
                   order?.status === 'waiting_seller'
-                    ? styles.stepTitleActive
+                    ? styles.stepCheck
                     : styles.stepNumber
                 }
               >
-                2
+                {sellerConfirmed ? 'OK' : '2'}
               </Text>
             </View>
 
             <View style={styles.stepContent}>
               <Text
                 style={
+                  sellerConfirmed ||
                   order?.status === 'waiting_seller'
                     ? styles.stepTitleActive
                     : styles.stepTitle
                 }
               >
-                {order?.status === 'waiting_seller'
-                  ? 'Waiting for seller'
-                  : order?.status === 'confirmed'
-                    ? 'Seller confirmed'
-                    : order?.status ===
-                        'declined_by_seller'
+                {sellerConfirmed
+                  ? 'Seller confirmed'
+                  : order?.status === 'waiting_seller'
+                    ? 'Waiting for seller'
+                    : order?.status === 'declined_by_seller'
                       ? 'Seller declined'
-                      : order?.status ===
-                          'cancelled_by_buyer'
+                      : order?.status === 'cancelled_by_buyer'
                         ? 'Order cancelled'
                         : 'Seller confirmation'}
               </Text>
 
               <Text style={styles.stepDescription}>
-                {order?.status === 'waiting_seller'
-                  ? 'Seller needs to confirm the order'
-                  : order?.status === 'confirmed'
-                    ? 'Seller accepted the order'
-                    : order?.status ===
-                        'declined_by_seller'
+                {sellerConfirmed
+                  ? 'Seller accepted the order'
+                  : order?.status === 'waiting_seller'
+                    ? 'Seller needs to confirm the order'
+                    : order?.status === 'declined_by_seller'
                       ? 'Seller declined the order'
-                      : order?.status ===
-                          'cancelled_by_buyer'
+                      : order?.status === 'cancelled_by_buyer'
                         ? 'Cancelled before seller confirmation'
-                        : 'Waiting for order update'}
+                        : 'Waiting for seller confirmation'}
               </Text>
             </View>
           </View>
@@ -484,14 +628,32 @@ export default function OrderScreen() {
           <View style={styles.stepLine} />
 
           <View style={styles.step}>
-            <View style={styles.stepCircle}>
-              <Text style={styles.stepNumber}>
-                3
+            <View
+              style={[
+                styles.stepCircle,
+                orderShipped &&
+                  styles.stepCircleActive,
+              ]}
+            >
+              <Text
+                style={
+                  orderShipped
+                    ? styles.stepCheck
+                    : styles.stepNumber
+                }
+              >
+                {orderShipped ? 'OK' : '3'}
               </Text>
             </View>
 
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>
+              <Text
+                style={
+                  orderShipped
+                    ? styles.stepTitleActive
+                    : styles.stepTitle
+                }
+              >
                 Shipped
               </Text>
 
@@ -504,14 +666,32 @@ export default function OrderScreen() {
           <View style={styles.stepLine} />
 
           <View style={styles.step}>
-            <View style={styles.stepCircle}>
-              <Text style={styles.stepNumber}>
-                4
+            <View
+              style={[
+                styles.stepCircle,
+                orderReceived &&
+                  styles.stepCircleActive,
+              ]}
+            >
+              <Text
+                style={
+                  orderReceived
+                    ? styles.stepCheck
+                    : styles.stepNumber
+                }
+              >
+                {orderReceived ? 'OK' : '4'}
               </Text>
             </View>
 
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>
+              <Text
+                style={
+                  orderReceived
+                    ? styles.stepTitleActive
+                    : styles.stepTitle
+                }
+              >
                 Received
               </Text>
 
@@ -524,14 +704,32 @@ export default function OrderScreen() {
           <View style={styles.stepLine} />
 
           <View style={styles.step}>
-            <View style={styles.stepCircle}>
-              <Text style={styles.stepNumber}>
-                5
+            <View
+              style={[
+                styles.stepCircle,
+                orderCompleted &&
+                  styles.stepCircleActive,
+              ]}
+            >
+              <Text
+                style={
+                  orderCompleted
+                    ? styles.stepCheck
+                    : styles.stepNumber
+                }
+              >
+                {orderCompleted ? 'OK' : '5'}
               </Text>
             </View>
 
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>
+              <Text
+                style={
+                  orderCompleted
+                    ? styles.stepTitleActive
+                    : styles.stepTitle
+                }
+              >
                 Seller paid
               </Text>
 
@@ -562,13 +760,103 @@ export default function OrderScreen() {
           </Text>
 
           <Text style={styles.infoText}>
-            The seller prepares and ships your
-            order. TEFTE will keep the transaction
-            status simple and visible here.
+            {order?.status === 'waiting_seller'
+              ? isSeller
+                ? 'Review the order and choose Confirm order or Decline.'
+                : 'Waiting for the seller to confirm your order.'
+              : order?.status === 'confirmed'
+                ? isSeller
+                  ? 'Prepare the item and mark the order as shipped when it is on the way.'
+                  : 'The seller confirmed your order and is preparing it for shipment.'
+                : order?.status === 'shipped'
+                  ? isSeller
+                    ? 'The order is marked as shipped. Waiting for the buyer to confirm delivery.'
+                    : 'Your order is on the way. Confirm received after it arrives.'
+                  : order?.status === 'received'
+                    ? 'Delivery has been confirmed. Complete the order to finish the TEFTE workflow.'
+                    : order?.status === 'completed'
+                      ? 'This TEFTE deal is complete.'
+                      : order?.status === 'cancelled_by_buyer'
+                        ? 'This order was cancelled before seller confirmation.'
+                        : order?.status === 'declined_by_seller'
+                          ? 'The seller declined this order.'
+                          : 'TEFTE will keep the order status visible here.'}
           </Text>
         </View>
+        {order?.status === 'waiting_seller' &&
+        isSeller ? (
+          <View style={styles.sellerActions}>
+            <Pressable
+              style={styles.confirmButton}
+              onPress={() =>
+                sellerDecision('confirm')
+              }
+              disabled={sellerDeciding}
+            >
+              <Text style={styles.confirmButtonText}>
+                {sellerDeciding
+                  ? 'Processing...'
+                  : 'Confirm order'}
+              </Text>
+            </Pressable>
 
-        {order?.status === 'waiting_seller' ? (
+            <Pressable
+              style={styles.declineButton}
+              onPress={() =>
+                sellerDecision('decline')
+              }
+              disabled={sellerDeciding}
+            >
+              <Text style={styles.declineButtonText}>
+                Decline
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {order?.status === 'received' ? (
+          <Pressable
+            style={styles.confirmButton}
+            onPress={completeOrder}
+            disabled={completing}
+          >
+            <Text style={styles.confirmButtonText}>
+              {completing
+                ? 'Completing...'
+                : 'Complete order'}
+            </Text>
+          </Pressable>
+        ) : null}
+        {order?.status === 'shipped' &&
+        !isSeller ? (
+          <Pressable
+            style={styles.confirmButton}
+            onPress={confirmReceived}
+            disabled={receiving}
+          >
+            <Text style={styles.confirmButtonText}>
+              {receiving
+                ? 'Updating...'
+                : 'Confirm received'}
+            </Text>
+          </Pressable>
+        ) : null}
+        {order?.status === 'confirmed' &&
+        isSeller ? (
+          <Pressable
+            style={styles.confirmButton}
+            onPress={markAsShipped}
+            disabled={shipping}
+          >
+            <Text style={styles.confirmButtonText}>
+              {shipping
+                ? 'Updating...'
+                : 'Mark as shipped'}
+            </Text>
+          </Pressable>
+        ) : null}
+        {order?.status === 'waiting_seller' &&
+        !isSeller ? (
           <Pressable
             style={styles.cancelButton}
             onPress={cancelOrder}
@@ -591,7 +879,7 @@ export default function OrderScreen() {
         </Pressable>
 
         <Text style={styles.footer}>
-          Paid в†’ Shipped в†’ Received в†’ Seller paid
+          {'Paid > Seller confirmed > Shipped > Received > Seller paid'}
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -599,6 +887,40 @@ export default function OrderScreen() {
 }
 
 const styles = StyleSheet.create({
+  sellerActions: {
+    gap: 10,
+    marginTop: 4,
+  },
+
+  confirmButton: {
+    backgroundColor: '#111111',
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  confirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  declineButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+
+  declineButtonText: {
+    color: '#B42318',
+    fontSize: 15,
+    fontWeight: '700',
+  },
   screen: {
     flex: 1,
     backgroundColor: '#F7F7F7',
@@ -917,6 +1239,22 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
 })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
