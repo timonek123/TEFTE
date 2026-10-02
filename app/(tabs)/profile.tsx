@@ -17,7 +17,7 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import * as ImagePicker from 'expo-image-picker'
 
-const API_URL = 'http://192.168.68.55:3000'
+const API_URL = 'http://192.168.68.53:3000'
 
 type ListingStatus = 'active' | 'sold'
 
@@ -1928,6 +1928,7 @@ const styles = StyleSheet.create({
     height: 30,
   },
 })
+
 
 
 

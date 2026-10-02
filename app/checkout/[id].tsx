@@ -43,7 +43,7 @@ type PaymentMethod =
   | 'USDT'
   | 'SKR'
 
-const API_URL = 'http://192.168.68.55:3000'
+const API_URL = 'http://192.168.68.53:3000'
 
 const SELLER_ADDRESS = address(
   'GqozyB3iStZU8kW5T1wdPWq8YnGX4XKd7TC9Zs5xTmMw'
@@ -437,7 +437,7 @@ export default function CheckoutScreen() {
                 styles.protectionIconText
               }
             >
-              вњ“
+              OK
             </Text>
           </View>
 
@@ -603,12 +603,11 @@ export default function CheckoutScreen() {
 
         <View style={styles.flowCard}>
           <Text style={styles.flowTitle}>
-            Protected transaction
+            Order protection workflow
           </Text>
 
           <Text style={styles.flowText}>
-            Paid в†’ Shipped в†’ Received в†’
-            Seller paid
+            {'Paid > Seller confirmed > Shipped > Received > Seller paid'}
           </Text>
         </View>
 
@@ -1017,6 +1016,9 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
 })
+
+
+
 
 
 

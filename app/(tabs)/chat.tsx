@@ -29,7 +29,7 @@ type ServerMessage = {
   time: string
 }
 
-const API_URL = 'http://192.168.68.55:3000'
+const API_URL = 'http://192.168.68.53:3000'
 
 const defaultConversations: Conversation[] = [
   {
@@ -432,3 +432,4 @@ const styles = StyleSheet.create({
     color: '#666666',
   },
 })
+

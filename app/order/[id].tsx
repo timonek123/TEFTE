@@ -46,7 +46,7 @@ type Order = {
   createdAt: string
   updatedAt: string
 }
-const API_URL = 'http://192.168.68.55:3000'
+const API_URL = 'http://192.168.68.53:3000'
 
 export default function OrderScreen() {
   const router = useRouter()
@@ -80,8 +80,6 @@ export default function OrderScreen() {
     ? params.reward[0]
     : params.reward
 
-  const isSkrDemoReward =
-    reward === 'skr-demo'
   const [order, setOrder] =
     useState<Order | null>(null)
   const sellerConfirmed =
@@ -101,6 +99,9 @@ export default function OrderScreen() {
 
   const orderCompleted =
     order?.status === 'completed'
+  const isSkrDemoReward =
+    reward === 'skr-demo' ||
+    order?.paymentMethod === 'SKR'
   const [product, setProduct] =
     useState<Product | null>(null)
 
@@ -541,7 +542,7 @@ export default function OrderScreen() {
           <View style={styles.protectionHeader}>
             <View style={styles.shield}>
               <Text style={styles.shieldText}>
-                вњ“
+                OK
               </Text>
             </View>
 
@@ -551,7 +552,7 @@ export default function OrderScreen() {
               </Text>
 
               <Text style={styles.protectionSubtitle}>
-                Protected transaction
+                Order protection workflow
               </Text>
             </View>
           </View>
@@ -764,7 +765,7 @@ export default function OrderScreen() {
         {signature ? (
           <View style={styles.transactionCard}>
             <Text style={styles.transactionLabel}>
-              Solana transaction
+              {isSkrDemoReward ? 'SKR demo reference' : 'Solana transaction'}
             </Text>
 
             <Text
@@ -1287,6 +1288,11 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
 })
+
+
+
+
+
 
 
 

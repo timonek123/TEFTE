@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 
-const API_URL = 'http://192.168.68.55:3000'
+const API_URL = 'http://192.168.68.53:3000'
 
 type Product = {
   id: string
@@ -880,4 +880,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 })
+
 
