@@ -1,4 +1,18 @@
-[
+﻿[
+  {
+    "id": "order-1790920430459",
+    "productId": "user-1790605722969",
+    "productTitle": "Samsung Galaxy Fit3 Fitness Tracker",
+    "productPrice": 80,
+    "productCurrency": "USDC",
+    "buyer": "7Nh4htnDEBwsQxDQwPEbcnKsQdv6WxKP2xh45etHWQKG",
+    "seller": "crypton.skr",
+    "paymentMethod": "SKR",
+    "transactionSignature": "SKR-DEMO-1790920429900",
+    "status": "waiting_seller",
+    "createdAt": "2026-10-02T05:53:50.459Z",
+    "updatedAt": "2026-10-02T05:53:50.459Z"
+  },
   {
     "id": "order-1790794148097",
     "productId": "user-1790605722969",
@@ -12,33 +26,5 @@
     "status": "completed",
     "createdAt": "2026-09-30T18:49:08.097Z",
     "updatedAt": "2026-10-01T12:28:24.829Z"
-  },
-  {
-    "id": "order-1790784603175",
-    "productId": "user-1790605722969",
-    "productTitle": "Samsung Galaxy Fit3 Fitness Tracker",
-    "productPrice": 80,
-    "productCurrency": "USDC",
-    "buyer": "7Nh4htnDEBwsQxDQwPEbcnKsQdv6WxKP2xh45etHWQKG",
-    "seller": "crypton.skr",
-    "paymentMethod": "SOL",
-    "transactionSignature": "dxBdszLi15CFB313tTQLKUnrqvGSF2rB37RBX76ZifcKBZ8DJdUkK38oDJGv8cLUMZqFy9oQ5P3uTsevns7iT3Y",
-    "status": "cancelled_by_buyer",
-    "createdAt": "2026-09-30T16:10:03.175Z",
-    "updatedAt": "2026-09-30T16:10:13.762Z"
-  },
-  {
-    "id": "order-1790783784660",
-    "productId": "user-1790605722969",
-    "productTitle": "Samsung Galaxy Fit3 Fitness Tracker",
-    "productPrice": 80,
-    "productCurrency": "USDC",
-    "buyer": "TEFTE-demo-buyer",
-    "seller": "crypton.skr",
-    "paymentMethod": "SOL",
-    "transactionSignature": "DEMO-TRANSACTION",
-    "status": "cancelled_by_buyer",
-    "createdAt": "2026-09-30T15:56:24.660Z",
-    "updatedAt": "2026-09-30T16:00:29.584Z"
   }
 ]
