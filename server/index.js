@@ -923,11 +923,32 @@ Use exactly this structure:
           .replace(/```/g, '')
           .trim()
 
-      const aiResult =
-        JSON.parse(
-          cleanedContent
+      const jsonStart =
+        cleanedContent.indexOf('{')
+
+      const jsonEnd =
+        cleanedContent.lastIndexOf('}')
+
+      if (
+        jsonStart === -1 ||
+        jsonEnd === -1 ||
+        jsonEnd <= jsonStart
+      ) {
+        throw new Error(
+          'Vision AI response did not contain valid JSON'
+        )
+      }
+
+      const jsonContent =
+        cleanedContent.slice(
+          jsonStart,
+          jsonEnd + 1
         )
 
+      const aiResult =
+        JSON.parse(
+          jsonContent
+        )
       const allowedCategories = [
         'Electronics',
         'Home',
@@ -1393,6 +1414,8 @@ app.listen(
     )
   }
 )
+
+
 
 
 

@@ -431,8 +431,7 @@ export default function SellScreen() {
                     <Text
                       style={styles.removeButtonText}
                     >
-                      Г—
-                    </Text>
+                      X</Text>
                   </Pressable>
                 </View>
               ))}
@@ -861,8 +860,8 @@ const styles = StyleSheet.create({
 
   removeButton: {
     position: 'absolute',
-    top: -6,
-    right: -6,
+    top: 4,
+    right: 4,
     width: 25,
     height: 25,
     borderRadius: 13,
@@ -1085,6 +1084,7 @@ const styles = StyleSheet.create({
     color: '#555555',
   },
 })
+
 
 
 
