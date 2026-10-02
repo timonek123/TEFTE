@@ -1,4 +1,5 @@
-﻿import { useState } from 'react'
+﻿import { API_URL } from '../../lib/api'
+import { useState } from 'react'
 import {
   Alert,
   Image,
@@ -12,7 +13,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 
-const API_URL = 'http://192.168.68.53:3000'
 const MAX_PHOTOS = 8
 
 type Listing = {
@@ -1085,4 +1085,6 @@ const styles = StyleSheet.create({
     color: '#555555',
   },
 })
+
+
 

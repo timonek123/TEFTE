@@ -1,4 +1,5 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { API_URL } from '../../lib/api'
+import { useEffect, useState } from 'react'
 import {
   useLocalSearchParams,
   useRouter,
@@ -42,8 +43,6 @@ type PaymentMethod =
   | 'USDC'
   | 'USDT'
   | 'SKR'
-
-const API_URL = 'http://192.168.68.53:3000'
 
 const SELLER_ADDRESS = address(
   'GqozyB3iStZU8kW5T1wdPWq8YnGX4XKd7TC9Zs5xTmMw'
@@ -1016,6 +1015,8 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
 })
+
+
 
 
 

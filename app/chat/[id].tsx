@@ -1,4 +1,5 @@
-﻿import { useEffect, useRef, useState } from 'react'
+﻿import { API_URL } from '../../lib/api'
+import { useEffect, useRef, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -13,8 +14,6 @@ import {
   TextInput,
   View,
 } from 'react-native'
-
-const API_URL = 'http://192.168.68.53:3000'
 
 type Message = {
   id: string
@@ -741,6 +740,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 })
+
+
 
 
 

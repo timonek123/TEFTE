@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react'
+﻿import { API_URL } from '../../lib/api'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import {
@@ -25,8 +26,6 @@ import {
   Text,
   View,
 } from 'react-native'
-
-const API_URL = 'http://192.168.68.53:3000'
 
 const SELLER_ADDRESS = address(
   'GqozyB3iStZU8kW5T1wdPWq8YnGX4XKd7TC9Zs5xTmMw'
@@ -682,6 +681,8 @@ const styles = StyleSheet.create({
     color: '#888888',
   },
 })
+
+
 
 
 

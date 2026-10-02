@@ -1,4 +1,5 @@
-﻿import { useCallback, useState } from 'react'
+﻿import { API_URL } from '../../lib/api'
+import { useCallback, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -16,8 +17,6 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import * as ImagePicker from 'expo-image-picker'
-
-const API_URL = 'http://192.168.68.53:3000'
 
 type ListingStatus = 'active' | 'sold'
 
@@ -620,7 +619,7 @@ export default function ProfileScreen() {
 
         <View style={styles.rewardCard}>
           <View style={styles.rewardIcon}>
-            <Text style={styles.rewardEmoji}>РІСљВ¦</Text>
+            <Text style={styles.rewardEmoji}>XP</Text>
           </View>
 
           <View style={styles.rewardInfo}>
@@ -826,7 +825,7 @@ export default function ProfileScreen() {
           </View>
         ) : products.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>СЂСџвЂњВ¦</Text>
+            <Text style={styles.emptyEmoji}>+</Text>
             <Text style={styles.emptyTitle}>No listings yet</Text>
             <Text style={styles.emptyText}>
               Take a few photos and let TEFTE AI help create your first
@@ -911,7 +910,7 @@ export default function ProfileScreen() {
                       <Text style={styles.productMeta} numberOfLines={1}>
                         {[product.category, product.condition]
                           .filter(Boolean)
-                          .join(' Р’В· ')}
+                          .join(' | ')}
                       </Text>
 
                       <View style={styles.productBottom}>
@@ -919,7 +918,7 @@ export default function ProfileScreen() {
                           {product.price} {product.currency || 'USDC'}
                         </Text>
 
-                        <Text style={styles.arrow}>РІвЂ вЂ™</Text>
+                        <Text style={styles.arrow}>{'>'}</Text>
                       </View>
                     </View>
                   </Pressable>
@@ -1389,7 +1388,7 @@ const styles = StyleSheet.create({
   },
 
   rewardIcon: {
-    width: 44,
+    width: 52,
     height: 44,
     borderRadius: 15,
     backgroundColor: '#FFFFFF',
@@ -1399,7 +1398,8 @@ const styles = StyleSheet.create({
   },
 
   rewardEmoji: {
-    fontSize: 22,
+    fontSize: 18,
+    fontWeight: '800',
     color: '#111111',
   },
 
@@ -1928,6 +1928,11 @@ const styles = StyleSheet.create({
     height: 30,
   },
 })
+
+
+
+
+
 
 
 

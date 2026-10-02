@@ -1,4 +1,5 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { API_URL } from '../../lib/api'
+import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
@@ -46,8 +47,6 @@ type Order = {
   createdAt: string
   updatedAt: string
 }
-const API_URL = 'http://192.168.68.53:3000'
-
 export default function OrderScreen() {
   const router = useRouter()
 
@@ -1288,6 +1287,8 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
 })
+
+
 
 
 

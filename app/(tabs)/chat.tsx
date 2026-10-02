@@ -1,4 +1,5 @@
-﻿import { useCallback, useState } from 'react'
+﻿import { API_URL } from '../../lib/api'
+import { useCallback, useState } from 'react'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -28,8 +29,6 @@ type ServerMessage = {
   sender: string
   time: string
 }
-
-const API_URL = 'http://192.168.68.53:3000'
 
 const defaultConversations: Conversation[] = [
   {
@@ -432,4 +431,6 @@ const styles = StyleSheet.create({
     color: '#666666',
   },
 })
+
+
 

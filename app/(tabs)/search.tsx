@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react'
+﻿import { API_URL } from '../../lib/api'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -10,8 +11,6 @@ import {
   TextInput,
   View,
 } from 'react-native'
-
-const API_URL = 'http://192.168.68.53:3000'
 
 type Product = {
   id: string
@@ -135,7 +134,7 @@ export default function SearchScreen() {
         </Text>
 
         <View style={styles.searchBox}>
-          <Text style={styles.searchIcon}>вЊ•</Text>
+          <Text style={styles.searchIcon}>{'\uD83D\uDD0D'}</Text>
 
           <TextInput
             style={styles.searchInput}
@@ -225,7 +224,7 @@ export default function SearchScreen() {
 
         {!loading && !error && filteredProducts.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>вЊ•</Text>
+            <Text style={styles.emptyIcon}>{'\uD83D\uDD0D'}</Text>
 
             <Text style={styles.emptyTitle}>
               Nothing found
@@ -318,7 +317,7 @@ export default function SearchScreen() {
                         {product.price} {product.currency}
                       </Text>
 
-                      <Text style={styles.arrow}>в†’</Text>
+                      <Text style={styles.arrow}>{'>'}</Text>
                     </View>
                   </View>
                 </Pressable>
@@ -639,4 +638,7 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
 })
+
+
+
 
