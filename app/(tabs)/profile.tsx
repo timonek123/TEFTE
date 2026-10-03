@@ -92,6 +92,44 @@ function shortAddress(address?: string) {
   return `${address.slice(0, 5)}...${address.slice(-5)}`
 }
 
+const XP_LEVEL_THRESHOLDS = [0, 100, 300, 700, 1500]
+
+function getXpLevel(xp: number) {
+  let levelIndex = 0
+
+  for (let index = XP_LEVEL_THRESHOLDS.length - 1; index >= 0; index -= 1) {
+    if (xp >= XP_LEVEL_THRESHOLDS[index]) {
+      levelIndex = index
+      break
+    }
+  }
+
+  const level = levelIndex + 1
+  const currentThreshold = XP_LEVEL_THRESHOLDS[levelIndex]
+  const nextThreshold = XP_LEVEL_THRESHOLDS[levelIndex + 1]
+
+  if (nextThreshold === undefined) {
+    return {
+      level,
+      currentThreshold,
+      nextThreshold: null,
+      progress: 1,
+      xpToNext: 0,
+    }
+  }
+
+  const levelRange = nextThreshold - currentThreshold
+  const levelProgress = Math.max(0, xp - currentThreshold)
+
+  return {
+    level,
+    currentThreshold,
+    nextThreshold,
+    progress: Math.min(1, levelProgress / levelRange),
+    xpToNext: Math.max(0, nextThreshold - xp),
+  }
+}
+
 export default function ProfileScreen() {
   const router = useRouter()
   const { account, connect } = useMobileWallet()
@@ -561,6 +599,9 @@ export default function ProfileScreen() {
 
   const listingBoosts = skrPurchases.length > 0 ? 1 : 0
 
+  const xpLevel = getXpLevel(tefteXp)
+  const xpProgressPercent = `${Math.round(xpLevel.progress * 100)}%`
+
   const myProductIds = new Set(
     products.map((product) => product.id),
   )
@@ -649,21 +690,42 @@ export default function ProfileScreen() {
         <View style={styles.trustCard}>
           <View style={styles.trustScore}>
             <Text style={styles.trustNumber}>New</Text>
-            <Text style={styles.trustLabel}>Seller status</Text>
+            <Text
+              style={styles.trustLabel}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+            >
+              Seller
+            </Text>
           </View>
 
           <View style={styles.trustDivider} />
 
           <View style={styles.trustScore}>
             <Text style={styles.trustNumber}>{activeCount}</Text>
-            <Text style={styles.trustLabel}>Active</Text>
+            <Text
+              style={styles.trustLabel}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+            >
+              Active
+            </Text>
           </View>
 
           <View style={styles.trustDivider} />
 
           <View style={styles.trustScore}>
             <Text style={styles.trustNumber}>{soldCount}</Text>
-            <Text style={styles.trustLabel}>Sold</Text>
+            <Text
+              style={styles.trustLabel}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+            >
+              Sold
+            </Text>
           </View>
         </View>
 
@@ -693,17 +755,70 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          <View style={styles.levelCard}>
+            <View style={styles.levelTopRow}>
+              <View>
+                <Text style={styles.levelEyebrow}>TEFTE LEVEL</Text>
+                <Text style={styles.levelTitle}>Level {xpLevel.level}</Text>
+              </View>
+
+              <Text style={styles.levelXp}>{tefteXp} XP</Text>
+            </View>
+
+            <View style={styles.levelTrack}>
+              <View
+                style={[
+                  styles.levelFill,
+                  { width: xpProgressPercent },
+                ]}
+              />
+            </View>
+
+            <View style={styles.levelBottomRow}>
+              {xpLevel.nextThreshold === null ? (
+                <Text style={styles.levelHint}>Maximum level reached</Text>
+              ) : (
+                <>
+                  <Text
+                    style={[styles.levelHint, styles.levelHintLeft]}
+                    numberOfLines={1}
+                  >
+                    {xpLevel.xpToNext} XP → L{xpLevel.level + 1}
+                  </Text>
+                  <Text
+                    style={styles.levelHint}
+                    numberOfLines={1}
+                  >
+                    {xpLevel.currentThreshold}/{xpLevel.nextThreshold}
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+
           <View style={styles.rewardStats}>
             <View style={styles.rewardStat}>
               <Text style={styles.rewardStatValue}>{tefteXp}</Text>
-              <Text style={styles.rewardStatLabel}>TEFTE XP</Text>
+              <Text
+                style={styles.rewardStatLabel}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1}
+              >
+                TEFTE XP
+              </Text>
             </View>
 
             <View style={styles.rewardStatDivider} />
 
             <View style={styles.rewardStat}>
               <Text style={styles.rewardStatValue}>{listingBoosts}</Text>
-              <Text style={styles.rewardStatLabel}>Listing Boosts</Text>
+              <Text
+                style={styles.rewardStatLabel}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1}
+              >
+                Boosts
+              </Text>
             </View>
 
             <View style={styles.rewardStatDivider} />
@@ -712,7 +827,13 @@ export default function ProfileScreen() {
               <Text style={styles.rewardStatValue}>
                 {skrPurchases.length}
               </Text>
-              <Text style={styles.rewardStatLabel}>SKR purchases</Text>
+              <Text
+                style={styles.rewardStatLabel}
+                numberOfLines={2}
+                maxFontSizeMultiplier={1}
+              >
+                SKR{'\n'}buys
+              </Text>
             </View>
           </View>
 
@@ -1460,7 +1581,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
     paddingVertical: 18,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     marginTop: 11,
     marginBottom: 12,
   },
@@ -1478,7 +1599,7 @@ const styles = StyleSheet.create({
 
   trustLabel: {
     marginTop: 4,
-    fontSize: 11,
+    fontSize: 9,
     color: '#888888',
   },
 
@@ -1548,12 +1669,78 @@ const styles = StyleSheet.create({
     color: '#367A51',
   },
 
+  levelCard: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 17,
+    backgroundColor: '#111111',
+  },
+
+  levelTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  levelEyebrow: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    color: '#AFAFAF',
+  },
+
+  levelTitle: {
+    marginTop: 2,
+    fontSize: 21,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+
+  levelXp: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  levelTrack: {
+    height: 8,
+    marginTop: 14,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#3A3A3A',
+  },
+
+  levelFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+  },
+
+  levelBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 8,
+  },
+
+  levelHint: {
+    fontSize: 10,
+    color: '#BDBDBD',
+  },
+
+  levelHintLeft: {
+    flex: 1,
+    marginRight: 10,
+  },
+
   rewardStats: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 16,
     paddingVertical: 14,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     borderRadius: 17,
     backgroundColor: '#FFFFFF',
   },
@@ -1571,7 +1758,8 @@ const styles = StyleSheet.create({
 
   rewardStatLabel: {
     marginTop: 4,
-    fontSize: 10,
+    fontSize: 9,
+    paddingHorizontal: 2,
     color: '#777777',
     textAlign: 'center',
   },
