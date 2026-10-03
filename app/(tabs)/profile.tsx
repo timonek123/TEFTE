@@ -65,6 +65,23 @@ type Order = {
   createdAt: string
   updatedAt: string
 }
+
+type RewardsAccount = {
+  wallet: string
+  xp: number
+  listingBoosts: number
+  completedSkrPurchases: number
+  rewardedOrderIds?: string[]
+  history?: Array<{
+    orderId: string
+    xpAwarded: number
+    listingBoostsAwarded: number
+    baseXp?: number
+    spendBonusXp?: number
+    awardedAt?: string
+  }>
+  updatedAt?: string | null
+}
 function getProductImage(product: Product) {
   const rawImage =
     product.imageUrls?.find((image) => Boolean(image)) || product.imageUrl
@@ -133,9 +150,12 @@ function getXpLevel(xp: number) {
 export default function ProfileScreen() {
   const router = useRouter()
   const { account, connect } = useMobileWallet()
+  const walletAddress = account?.address?.toString()
 
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<Order[]>([])
+  const [serverRewards, setServerRewards] =
+    useState<RewardsAccount | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -149,6 +169,66 @@ export default function ProfileScreen() {
   const [editDescription, setEditDescription] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const [editPhotos, setEditPhotos] = useState<EditPhoto[]>([])
+
+  const loadRewards = useCallback(async () => {
+    if (!walletAddress) {
+      setServerRewards(null)
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/rewards/${encodeURIComponent(walletAddress)}`
+      )
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status}`
+        )
+      }
+
+      const data = await response.json()
+      const raw = data?.rewards
+
+      setServerRewards({
+        wallet:
+          typeof raw?.wallet === 'string'
+            ? raw.wallet
+            : walletAddress,
+        xp: Math.max(
+          0,
+          Number(raw?.xp) || 0,
+        ),
+        listingBoosts: Math.max(
+          0,
+          Number(raw?.listingBoosts) || 0,
+        ),
+        completedSkrPurchases: Math.max(
+          0,
+          Number(raw?.completedSkrPurchases) || 0,
+        ),
+        rewardedOrderIds:
+          Array.isArray(raw?.rewardedOrderIds)
+            ? raw.rewardedOrderIds
+            : [],
+        history:
+          Array.isArray(raw?.history)
+            ? raw.history
+            : [],
+        updatedAt:
+          typeof raw?.updatedAt === 'string'
+            ? raw.updatedAt
+            : null,
+      })
+    } catch (err) {
+      console.error(
+        'Profile rewards error:',
+        err
+      )
+
+      setServerRewards(null)
+    }
+  }, [walletAddress])
 
   const loadOrders = useCallback(async () => {
     try {
@@ -220,7 +300,8 @@ export default function ProfileScreen() {
     useCallback(() => {
       loadProducts()
       loadOrders()
-    }, [loadProducts, loadOrders]),
+      loadRewards()
+    }, [loadProducts, loadOrders, loadRewards]),
   )
 
   const openEdit = (product: Product) => {
@@ -545,30 +626,14 @@ export default function ProfileScreen() {
     )
   }
 
-  const walletAddress = account?.address?.toString()
   const myPurchases = orders.filter(
     (order) =>
       Boolean(walletAddress) &&
       order.buyer === walletAddress,
   )
 
-  // SKR purchase rewards are intentionally separate from Stake/Lock SKR.
-  // Rewards unlock only after the order is fully completed.
-  // First completed SKR purchase: +100 TEFTE XP + 1 Listing Boost.
-  // Later completed SKR purchases: +20 XP + 1 XP per $1 of order value,
-  // with the spend bonus capped at +30 XP per order.
-  const skrPurchases = myPurchases
-    .filter(
-      (order) =>
-        order.paymentMethod?.trim().toUpperCase().includes('SKR') &&
-        order.status === 'completed',
-    )
-    .sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() -
-        new Date(b.createdAt).getTime(),
-    )
-
+  // Completed SKR rewards are authoritative on the server.
+  // The client only uses orders to show whether an SKR purchase is still pending.
   const pendingSkrPurchases = myPurchases.filter(
     (order) =>
       order.paymentMethod?.trim().toUpperCase().includes('SKR') &&
@@ -579,25 +644,20 @@ export default function ProfileScreen() {
       ].includes(order.status),
   )
 
-  const tefteXp = skrPurchases.reduce((total, order, index) => {
-    if (index === 0) {
-      return total + 100
-    }
+  const tefteXp = Math.max(
+    0,
+    serverRewards?.xp ?? 0,
+  )
 
-    const orderValueUsd =
-      order.productCurrency?.trim().toUpperCase() === 'USDC'
-        ? Math.max(0, order.productPrice)
-        : 0
+  const listingBoosts = Math.max(
+    0,
+    serverRewards?.listingBoosts ?? 0,
+  )
 
-    const spendBonus = Math.min(
-      30,
-      Math.floor(orderValueUsd),
-    )
-
-    return total + 20 + spendBonus
-  }, 0)
-
-  const listingBoosts = skrPurchases.length > 0 ? 1 : 0
+  const completedSkrPurchases = Math.max(
+    0,
+    serverRewards?.completedSkrPurchases ?? 0,
+  )
 
   const xpLevel = getXpLevel(tefteXp)
   const xpProgressPercent = `${Math.round(xpLevel.progress * 100)}%`
@@ -629,6 +689,7 @@ export default function ProfileScreen() {
             onRefresh={() => {
               loadProducts(true)
               loadOrders()
+              loadRewards()
             }}
           />
         }
@@ -746,7 +807,7 @@ export default function ProfileScreen() {
 
             <View style={styles.rewardLiveBadge}>
               <Text style={styles.rewardLiveBadgeText}>
-                {skrPurchases.length > 0
+                {completedSkrPurchases > 0
                   ? 'ACTIVE'
                   : pendingSkrPurchases.length > 0
                     ? 'PENDING'
@@ -825,7 +886,7 @@ export default function ProfileScreen() {
 
             <View style={styles.rewardStat}>
               <Text style={styles.rewardStatValue}>
-                {skrPurchases.length}
+                {completedSkrPurchases}
               </Text>
               <Text
                 style={styles.rewardStatLabel}

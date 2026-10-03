@@ -1,4 +1,4 @@
-﻿require('dotenv').config()
+require('dotenv').config()
 
 const express = require('express')
 const multer = require('multer')
@@ -18,6 +18,11 @@ const CHAT_MESSAGES_FILE = path.join(
 const ORDERS_FILE = path.join(
   __dirname,
   'orders.json'
+)
+
+const REWARDS_FILE = path.join(
+  __dirname,
+  'rewards.json'
 )
 
 const UPLOADS_DIR = path.join(__dirname, 'uploads')
@@ -117,6 +122,40 @@ function loadOrders() {
     return []
   }
 }
+function loadRewards() {
+  try {
+    if (!fs.existsSync(REWARDS_FILE)) {
+      fs.writeFileSync(
+        REWARDS_FILE,
+        '[]',
+        'utf8'
+      )
+
+      return []
+    }
+
+    const raw = fs
+      .readFileSync(REWARDS_FILE, 'utf8')
+      .replace(/^\uFEFF/, '')
+      .trim()
+
+    if (!raw) {
+      return []
+    }
+
+    const parsed = JSON.parse(raw)
+
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.error(
+      'Could not load rewards.json:',
+      error
+    )
+
+    return []
+  }
+}
+
 function saveOrders() {
   fs.writeFileSync(
     ORDERS_FILE,
@@ -124,6 +163,15 @@ function saveOrders() {
     'utf8'
   )
 }
+
+function saveRewards() {
+  fs.writeFileSync(
+    REWARDS_FILE,
+    JSON.stringify(rewards, null, 2),
+    'utf8'
+  )
+}
+
 function saveChatMessages() {
   fs.writeFileSync(
     CHAT_MESSAGES_FILE,
@@ -142,10 +190,224 @@ function saveUserProducts() {
 const userProducts = loadUserProducts()
 const chatMessages = loadChatMessages()
 const orders = loadOrders()
+const rewards = loadRewards()
 
 function getAllProducts() {
   return [...userProducts, ...products]
 }
+
+function isSkrPayment(order) {
+  return (
+    typeof order?.paymentMethod === 'string' &&
+    order.paymentMethod
+      .trim()
+      .toUpperCase()
+      .includes('SKR')
+  )
+}
+
+function isRewardableBuyer(order) {
+  return (
+    typeof order?.buyer === 'string' &&
+    order.buyer.trim() &&
+    order.buyer !== 'TEFTE buyer'
+  )
+}
+
+function getRewardAccount(wallet) {
+  return rewards.find(
+    (item) => item.wallet === wallet
+  )
+}
+
+function getOrCreateRewardAccount(wallet) {
+  let account = getRewardAccount(wallet)
+
+  if (account) {
+    if (!Array.isArray(account.rewardedOrderIds)) {
+      account.rewardedOrderIds = []
+    }
+
+    if (!Array.isArray(account.history)) {
+      account.history = []
+    }
+
+    account.xp = Number(account.xp) || 0
+    account.listingBoosts =
+      Number(account.listingBoosts) || 0
+    account.completedSkrPurchases =
+      Number(account.completedSkrPurchases) || 0
+
+    return account
+  }
+
+  account = {
+    wallet,
+    xp: 0,
+    listingBoosts: 0,
+    completedSkrPurchases: 0,
+    rewardedOrderIds: [],
+    history: [],
+    updatedAt: new Date().toISOString(),
+  }
+
+  rewards.push(account)
+
+  return account
+}
+
+function calculateSkrReward(order, account) {
+  const isFirstPurchase =
+    account.completedSkrPurchases === 0
+
+  if (isFirstPurchase) {
+    return {
+      xpAwarded: 100,
+      listingBoostsAwarded: 1,
+      baseXp: 100,
+      spendBonusXp: 0,
+    }
+  }
+
+  const isUsdc =
+    typeof order.productCurrency === 'string' &&
+    order.productCurrency
+      .trim()
+      .toUpperCase() === 'USDC'
+
+  const orderValueUsd = isUsdc
+    ? Math.max(
+        0,
+        Number(order.productPrice) || 0
+      )
+    : 0
+
+  const spendBonusXp = Math.min(
+    30,
+    Math.floor(orderValueUsd)
+  )
+
+  return {
+    xpAwarded: 20 + spendBonusXp,
+    listingBoostsAwarded: 0,
+    baseXp: 20,
+    spendBonusXp,
+  }
+}
+
+function applySkrReward(order, shouldSave = true) {
+  if (
+    order?.status !== 'completed' ||
+    !isSkrPayment(order) ||
+    !isRewardableBuyer(order)
+  ) {
+    return null
+  }
+
+  const account =
+    getOrCreateRewardAccount(order.buyer)
+
+  if (
+    account.rewardedOrderIds.includes(
+      order.id
+    )
+  ) {
+    const previousReward =
+      account.history.find(
+        (item) =>
+          item.orderId === order.id
+      ) || null
+
+    return {
+      alreadyRewarded: true,
+      account,
+      reward: previousReward,
+    }
+  }
+
+  const calculated =
+    calculateSkrReward(order, account)
+
+  const now = new Date().toISOString()
+
+  const reward = {
+    orderId: order.id,
+    xpAwarded: calculated.xpAwarded,
+    listingBoostsAwarded:
+      calculated.listingBoostsAwarded,
+    baseXp: calculated.baseXp,
+    spendBonusXp:
+      calculated.spendBonusXp,
+    productPrice:
+      Number(order.productPrice) || 0,
+    productCurrency:
+      order.productCurrency || 'USDC',
+    awardedAt: now,
+  }
+
+  account.xp += reward.xpAwarded
+  account.listingBoosts +=
+    reward.listingBoostsAwarded
+  account.completedSkrPurchases += 1
+  account.rewardedOrderIds.push(order.id)
+  account.history.push(reward)
+  account.updatedAt = now
+
+  if (shouldSave) {
+    saveRewards()
+  }
+
+  return {
+    alreadyRewarded: false,
+    account,
+    reward,
+  }
+}
+
+function syncCompletedSkrRewards(
+  wallet = null
+) {
+  const completedOrders = orders
+    .filter(
+      (order) =>
+        order.status === 'completed' &&
+        isSkrPayment(order) &&
+        isRewardableBuyer(order) &&
+        (!wallet || order.buyer === wallet)
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() -
+        new Date(b.createdAt).getTime()
+    )
+
+  let changed = false
+
+  for (const order of completedOrders) {
+    const account =
+      getOrCreateRewardAccount(order.buyer)
+
+    if (
+      account.rewardedOrderIds.includes(
+        order.id
+      )
+    ) {
+      continue
+    }
+
+    applySkrReward(order, false)
+    changed = true
+  }
+
+  if (changed) {
+    saveRewards()
+  }
+
+  return changed
+}
+
+// Backfill any completed SKR orders that existed before rewards.json.
+syncCompletedSkrRewards()
 
 app.use(express.json())
 
@@ -1262,6 +1524,7 @@ app.patch('/api/orders/:orderId/buyer-received', (req, res) => {
   }
 })
 // Complete the TEFTE workflow after delivery is confirmed.
+// SKR rewards are granted here, only after the order reaches Completed.
 app.patch('/api/orders/:orderId/complete', (req, res) => {
   try {
     const { orderId } = req.params
@@ -1287,15 +1550,38 @@ app.patch('/api/orders/:orderId/complete', (req, res) => {
     order.updatedAt =
       new Date().toISOString()
 
+    // Persist the order state first.
+    // If reward persistence ever fails, the rewards endpoint can
+    // safely backfill this completed order because order IDs are
+    // stored in rewardedOrderIds.
     saveOrders()
+
+    const rewardResult =
+      applySkrReward(order)
 
     console.log(
       'TEFTE order completed:',
       order.id
     )
 
+    if (
+      rewardResult &&
+      !rewardResult.alreadyRewarded
+    ) {
+      console.log(
+        'TEFTE SKR reward:',
+        order.buyer,
+        `+${rewardResult.reward.xpAwarded} XP`,
+        `+${rewardResult.reward.listingBoostsAwarded} boost`
+      )
+    }
+
     res.json({
       order,
+      reward:
+        rewardResult?.reward || null,
+      rewards:
+        rewardResult?.account || null,
     })
   } catch (error) {
     console.error(
@@ -1355,6 +1641,51 @@ app.patch('/api/orders/:orderId/buyer-cancel', (req, res) => {
     })
   }
 })
+// Get persisted TEFTE rewards for one wallet.
+app.get('/api/rewards/:wallet', (req, res) => {
+  try {
+    const wallet =
+      typeof req.params.wallet === 'string'
+        ? req.params.wallet.trim()
+        : ''
+
+    if (!wallet) {
+      return res.status(400).json({
+        error: 'Wallet is required',
+      })
+    }
+
+    // Repairs any completed SKR order that has not been recorded
+    // in rewards.json yet.
+    syncCompletedSkrRewards(wallet)
+
+    const account =
+      getRewardAccount(wallet)
+
+    res.json({
+      rewards:
+        account || {
+          wallet,
+          xp: 0,
+          listingBoosts: 0,
+          completedSkrPurchases: 0,
+          rewardedOrderIds: [],
+          history: [],
+          updatedAt: null,
+        },
+    })
+  } catch (error) {
+    console.error(
+      'Could not load TEFTE rewards:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not load rewards',
+    })
+  }
+})
+
 // Get all marketplace orders.
 app.get('/api/orders', (req, res) => {
   try {
@@ -1411,6 +1742,14 @@ app.listen(
 
     console.log(
       `Loaded ${products.length} products`
+    )
+
+    console.log(
+      `Loaded ${orders.length} orders`
+    )
+
+    console.log(
+      `Loaded ${rewards.length} reward accounts`
     )
   }
 )
