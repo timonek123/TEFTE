@@ -514,6 +514,15 @@ export default function ProfileScreen() {
       order.buyer === walletAddress,
   )
 
+  // SKR purchase rewards are intentionally separate from Stake/Lock SKR.
+  // Current TEFTE demo rule:
+  // 1 SKR purchase = +100 TEFTE XP + 1 Listing Boost.
+  const skrPurchases = myPurchases.filter((order) =>
+    order.paymentMethod?.trim().toUpperCase().includes('SKR'),
+  )
+  const tefteXp = skrPurchases.length * 100
+  const listingBoosts = skrPurchases.length
+
   const myProductIds = new Set(
     products.map((product) => product.id),
   )
@@ -538,7 +547,10 @@ export default function ProfileScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => loadProducts(true)}
+            onRefresh={() => {
+              loadProducts(true)
+              loadOrders()
+            }}
           />
         }
       >
@@ -617,19 +629,73 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <View style={styles.rewardCard}>
-          <View style={styles.rewardIcon}>
-            <Text style={styles.rewardEmoji}>XP</Text>
+        <Text style={styles.sectionTitle}>TEFTE Rewards</Text>
+
+        <View style={styles.rewardsPanel}>
+          <View style={styles.rewardHeader}>
+            <View style={styles.rewardIcon}>
+              <Text style={styles.rewardEmoji}>XP</Text>
+            </View>
+
+            <View style={styles.rewardInfo}>
+              <Text style={styles.rewardTitle}>SKR purchase rewards</Text>
+              <Text style={styles.rewardText}>
+                Rewards earned from purchases paid with SKR.
+              </Text>
+            </View>
+
+            <View style={styles.rewardLiveBadge}>
+              <Text style={styles.rewardLiveBadgeText}>
+                {skrPurchases.length > 0 ? 'ACTIVE' : 'READY'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.rewardStats}>
+            <View style={styles.rewardStat}>
+              <Text style={styles.rewardStatValue}>{tefteXp}</Text>
+              <Text style={styles.rewardStatLabel}>TEFTE XP</Text>
+            </View>
+
+            <View style={styles.rewardStatDivider} />
+
+            <View style={styles.rewardStat}>
+              <Text style={styles.rewardStatValue}>{listingBoosts}</Text>
+              <Text style={styles.rewardStatLabel}>Listing Boosts</Text>
+            </View>
+
+            <View style={styles.rewardStatDivider} />
+
+            <View style={styles.rewardStat}>
+              <Text style={styles.rewardStatValue}>
+                {skrPurchases.length}
+              </Text>
+              <Text style={styles.rewardStatLabel}>SKR purchases</Text>
+            </View>
+          </View>
+
+          <View style={styles.rewardRule}>
+            <Text style={styles.rewardRuleTitle}>Current demo rule</Text>
+            <Text style={styles.rewardRuleText}>
+              Every SKR purchase earns +100 TEFTE XP and +1 Listing Boost.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.stakeCard}>
+          <View style={styles.stakeIcon}>
+            <Text style={styles.stakeIconText}>SKR</Text>
           </View>
 
           <View style={styles.rewardInfo}>
-            <Text style={styles.rewardTitle}>TEFTE Rewards</Text>
+            <Text style={styles.rewardTitle}>Stake / Lock SKR</Text>
             <Text style={styles.rewardText}>
-              Use SKR in TEFTE to earn XP, boosts and mascot rewards.
+              Long-term perks and status. This is separate from purchase
+              rewards.
             </Text>
           </View>
 
-          <Text style={styles.comingSoon}>Soon</Text>
+          <Text style={styles.comingSoon}>Later</Text>
         </View>
 
         <View style={styles.sectionHeader}>
@@ -1378,13 +1444,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECECE8',
   },
 
-  rewardCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  rewardsPanel: {
     backgroundColor: '#EEEDE8',
     borderRadius: 22,
     padding: 15,
-    marginBottom: 28,
+    marginTop: 11,
+    marginBottom: 12,
+  },
+
+  rewardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 
   rewardIcon: {
@@ -1418,6 +1488,101 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: '#666666',
+  },
+
+  rewardLiveBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+  },
+
+  rewardLiveBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#367A51',
+  },
+
+  rewardStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+  },
+
+  rewardStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+
+  rewardStatValue: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#111111',
+  },
+
+  rewardStatLabel: {
+    marginTop: 4,
+    fontSize: 10,
+    color: '#777777',
+    textAlign: 'center',
+  },
+
+  rewardStatDivider: {
+    width: 1,
+    height: 34,
+    backgroundColor: '#ECECE8',
+  },
+
+  rewardRule: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.58)',
+  },
+
+  rewardRuleTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#333333',
+  },
+
+  rewardRuleText: {
+    marginTop: 4,
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#666666',
+  },
+
+  stakeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 15,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: '#ECECE8',
+  },
+
+  stakeIcon: {
+    width: 52,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: '#EEEDE8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  stakeIconText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#111111',
   },
 
   comingSoon: {
@@ -1928,19 +2093,3 @@ const styles = StyleSheet.create({
     height: 30,
   },
 })
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
