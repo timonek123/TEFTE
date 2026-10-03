@@ -83,3 +83,4 @@ chat-before-messages.tsx
 product-before-message-seller.tsx
 server/index-before-chat-storage.js
 server/index-before-message-edit-delete.js
+server/rewards.json
