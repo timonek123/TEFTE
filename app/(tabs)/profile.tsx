@@ -659,6 +659,16 @@ export default function ProfileScreen() {
     serverRewards?.completedSkrPurchases ?? 0,
   )
 
+  const recentRewardHistory = [
+    ...(serverRewards?.history ?? []),
+  ]
+    .sort(
+      (a, b) =>
+        new Date(b.awardedAt || 0).getTime() -
+        new Date(a.awardedAt || 0).getTime(),
+    )
+    .slice(0, 3)
+
   const xpLevel = getXpLevel(tefteXp)
   const xpProgressPercent = `${Math.round(xpLevel.progress * 100)}%`
 
@@ -905,6 +915,86 @@ export default function ProfileScreen() {
               Later purchases: +20 XP plus +1 XP per $1 of order value, with a
               maximum +30 spend bonus per order.
             </Text>
+          </View>
+
+          <View style={styles.rewardActivity}>
+            <View style={styles.rewardActivityHeader}>
+              <View>
+                <Text style={styles.rewardActivityTitle}>
+                  Reward activity
+                </Text>
+                <Text style={styles.rewardActivitySubtitle}>
+                  SKR rewards
+                </Text>
+              </View>
+
+              <Text style={styles.rewardActivityCount}>
+                {serverRewards?.history?.length ?? 0}
+              </Text>
+            </View>
+
+            {recentRewardHistory.length === 0 ? (
+              <View style={styles.rewardActivityEmpty}>
+                <Text style={styles.rewardActivityEmptyTitle}>
+                  No rewards yet
+                </Text>
+                <Text style={styles.rewardActivityEmptyText}>
+                  Completed SKR purchases will appear here.
+                </Text>
+              </View>
+            ) : (
+              recentRewardHistory.map((reward, index) => {
+                const rewardOrder = orders.find(
+                  (order) => order.id === reward.orderId,
+                )
+
+                const rewardDate = reward.awardedAt
+                  ? new Date(reward.awardedAt).toLocaleDateString()
+                  : ''
+
+                return (
+                  <View
+                    key={reward.orderId}
+                    style={[
+                      styles.rewardActivityRow,
+                      index !== recentRewardHistory.length - 1 &&
+                        styles.rewardActivityRowBorder,
+                    ]}
+                  >
+                    <View style={styles.rewardActivityIcon}>
+                      <Text style={styles.rewardActivityIconText}>
+                        +XP
+                      </Text>
+                    </View>
+
+                    <View style={styles.rewardActivityInfo}>
+                      <Text
+                        style={styles.rewardActivityProduct}
+                        numberOfLines={1}
+                      >
+                        {rewardOrder?.productTitle || 'SKR purchase'}
+                      </Text>
+
+                      <Text style={styles.rewardActivityMeta}>
+                        {rewardDate || 'Completed purchase'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.rewardActivityAmount}>
+                      <Text style={styles.rewardActivityXp}>
+                        +{reward.xpAwarded} XP
+                      </Text>
+
+                      {reward.listingBoostsAwarded > 0 ? (
+                        <Text style={styles.rewardActivityBoost}>
+                          +{reward.listingBoostsAwarded} Boost
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                )
+              })
+            )}
           </View>
         </View>
 
@@ -1849,6 +1939,129 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     color: '#666666',
+  },
+
+  rewardActivity: {
+    marginTop: 12,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+
+  rewardActivityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 11,
+  },
+
+  rewardActivityTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#111111',
+  },
+
+  rewardActivitySubtitle: {
+    marginTop: 2,
+    fontSize: 10,
+    color: '#777777',
+  },
+
+  rewardActivityCount: {
+    minWidth: 25,
+    height: 25,
+    paddingHorizontal: 7,
+    borderRadius: 13,
+    backgroundColor: '#111111',
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
+    lineHeight: 25,
+  },
+
+  rewardActivityEmpty: {
+    paddingHorizontal: 14,
+    paddingTop: 4,
+    paddingBottom: 15,
+  },
+
+  rewardActivityEmptyTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#333333',
+  },
+
+  rewardActivityEmptyText: {
+    marginTop: 3,
+    fontSize: 10,
+    lineHeight: 14,
+    color: '#777777',
+  },
+
+  rewardActivityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 14,
+    paddingVertical: 11,
+  },
+
+  rewardActivityRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFEA',
+  },
+
+  rewardActivityIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: '#EEEDE8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+
+  rewardActivityIconText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#111111',
+  },
+
+  rewardActivityInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  rewardActivityProduct: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#222222',
+  },
+
+  rewardActivityMeta: {
+    marginTop: 3,
+    fontSize: 9,
+    color: '#888888',
+  },
+
+  rewardActivityAmount: {
+    alignItems: 'flex-end',
+    marginLeft: 10,
+  },
+
+  rewardActivityXp: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#111111',
+  },
+
+  rewardActivityBoost: {
+    marginTop: 2,
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#777777',
   },
 
   stakeCard: {
