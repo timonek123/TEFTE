@@ -736,7 +736,7 @@ export default function OrderScreen() {
           </View>
         </View>
 
-        {isSkrOrder ? (
+        {isSkrOrder && !isSeller ? (
           <View style={styles.skrRewardCard}>
             {order?.status === 'completed' ? (
               <>
