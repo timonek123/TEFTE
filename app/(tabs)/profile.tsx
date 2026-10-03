@@ -515,13 +515,51 @@ export default function ProfileScreen() {
   )
 
   // SKR purchase rewards are intentionally separate from Stake/Lock SKR.
-  // Current TEFTE demo rule:
-  // 1 SKR purchase = +100 TEFTE XP + 1 Listing Boost.
-  const skrPurchases = myPurchases.filter((order) =>
-    order.paymentMethod?.trim().toUpperCase().includes('SKR'),
+  // Rewards unlock only after the order is fully completed.
+  // First completed SKR purchase: +100 TEFTE XP + 1 Listing Boost.
+  // Later completed SKR purchases: +20 XP + 1 XP per $1 of order value,
+  // with the spend bonus capped at +30 XP per order.
+  const skrPurchases = myPurchases
+    .filter(
+      (order) =>
+        order.paymentMethod?.trim().toUpperCase().includes('SKR') &&
+        order.status === 'completed',
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() -
+        new Date(b.createdAt).getTime(),
+    )
+
+  const pendingSkrPurchases = myPurchases.filter(
+    (order) =>
+      order.paymentMethod?.trim().toUpperCase().includes('SKR') &&
+      ![
+        'completed',
+        'declined_by_seller',
+        'cancelled_by_buyer',
+      ].includes(order.status),
   )
-  const tefteXp = skrPurchases.length * 100
-  const listingBoosts = skrPurchases.length
+
+  const tefteXp = skrPurchases.reduce((total, order, index) => {
+    if (index === 0) {
+      return total + 100
+    }
+
+    const orderValueUsd =
+      order.productCurrency?.trim().toUpperCase() === 'USDC'
+        ? Math.max(0, order.productPrice)
+        : 0
+
+    const spendBonus = Math.min(
+      30,
+      Math.floor(orderValueUsd),
+    )
+
+    return total + 20 + spendBonus
+  }, 0)
+
+  const listingBoosts = skrPurchases.length > 0 ? 1 : 0
 
   const myProductIds = new Set(
     products.map((product) => product.id),
@@ -640,13 +678,17 @@ export default function ProfileScreen() {
             <View style={styles.rewardInfo}>
               <Text style={styles.rewardTitle}>SKR purchase rewards</Text>
               <Text style={styles.rewardText}>
-                Rewards earned from purchases paid with SKR.
+                Rewards unlock after an SKR order reaches Completed.
               </Text>
             </View>
 
             <View style={styles.rewardLiveBadge}>
               <Text style={styles.rewardLiveBadgeText}>
-                {skrPurchases.length > 0 ? 'ACTIVE' : 'READY'}
+                {skrPurchases.length > 0
+                  ? 'ACTIVE'
+                  : pendingSkrPurchases.length > 0
+                    ? 'PENDING'
+                    : 'READY'}
               </Text>
             </View>
           </View>
@@ -675,9 +717,11 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.rewardRule}>
-            <Text style={styles.rewardRuleTitle}>Current demo rule</Text>
+            <Text style={styles.rewardRuleTitle}>Reward rule</Text>
             <Text style={styles.rewardRuleText}>
-              Every SKR purchase earns +100 TEFTE XP and +1 Listing Boost.
+              First completed SKR purchase: +100 TEFTE XP and +1 Listing Boost.
+              Later purchases: +20 XP plus +1 XP per $1 of order value, with a
+              maximum +30 spend bonus per order.
             </Text>
           </View>
         </View>
