@@ -1,19 +1,56 @@
-﻿import { API_URL } from '../../lib/api'
-import { useEffect, useState } from 'react'
+import { API_URL } from '../../lib/api'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native'
 import {
   useLocalSearchParams,
   useRouter,
 } from 'expo-router'
+
+type CarrierCode =
+  | 'nova_poshta'
+  | 'ukrposhta'
+  | 'meest'
+
+const CARRIERS: Array<{
+  code: CarrierCode
+  label: string
+}> = [
+  {
+    code: 'nova_poshta',
+    label: 'Nova Poshta',
+  },
+  {
+    code: 'ukrposhta',
+    label: 'Ukrposhta',
+  },
+  {
+    code: 'meest',
+    label: 'Meest',
+  },
+]
+
+function getCarrierLabel(
+  carrier?: string | null,
+) {
+  return (
+    CARRIERS.find(
+      (item) => item.code === carrier,
+    )?.label || carrier || 'Carrier'
+  )
+}
 
 type Product = {
   id: string
@@ -42,10 +79,31 @@ type Order = {
     | 'declined_by_seller'
     | 'cancelled_by_buyer'
     | 'shipped'
-    | 'received'
+    | 'delivered'
+    | 'disputed'
     | 'completed'
+  carrier?: CarrierCode | null
+  carrierStatus?: string | null
+  trackingNumber?: string | null
+  trackingVerifiedAt?: string | null
+  shippedAt?: string | null
+  deliveredAt?: string | null
+  protectionEndsAt?: string | null
+  disputedAt?: string | null
+  disputeReason?: string | null
+  completedAt?: string | null
+  completionReason?: string | null
   createdAt: string
   updatedAt: string
+}
+
+type OrderReward = {
+  orderId: string
+  xpAwarded: number
+  listingBoostsAwarded: number
+  baseXp?: number
+  spendBonusXp?: number
+  awardedAt?: string
 }
 export default function OrderScreen() {
   const router = useRouter()
@@ -79,28 +137,74 @@ export default function OrderScreen() {
     ? params.reward[0]
     : params.reward
 
+  const scrollRef = useRef<ScrollView>(null)
+
   const [order, setOrder] =
     useState<Order | null>(null)
+  const [orderReward, setOrderReward] =
+    useState<OrderReward | null>(null)
+  const [now, setNow] =
+    useState(Date.now())
+
   const sellerConfirmed =
     order?.status === 'confirmed' ||
     order?.status === 'shipped' ||
-    order?.status === 'received' ||
+    order?.status === 'delivered' ||
+    order?.status === 'disputed' ||
     order?.status === 'completed'
 
   const orderShipped =
     order?.status === 'shipped' ||
-    order?.status === 'received' ||
+    order?.status === 'delivered' ||
+    order?.status === 'disputed' ||
     order?.status === 'completed'
 
-  const orderReceived =
-    order?.status === 'received' ||
+  const orderDelivered =
+    order?.status === 'delivered' ||
+    order?.status === 'disputed' ||
     order?.status === 'completed'
+
+  const orderDisputed =
+    order?.status === 'disputed'
 
   const orderCompleted =
     order?.status === 'completed'
-  const isSkrDemoReward =
+
+  const isSkrOrder =
     reward === 'skr-demo' ||
     order?.paymentMethod === 'SKR'
+
+  const protectionEndsAtMs =
+    order?.protectionEndsAt
+      ? new Date(order.protectionEndsAt).getTime()
+      : 0
+
+  const protectionRemainingMs =
+    protectionEndsAtMs > now
+      ? protectionEndsAtMs - now
+      : 0
+
+  const protectionHours =
+    Math.floor(
+      protectionRemainingMs /
+        (60 * 60 * 1000)
+    )
+
+  const protectionMinutes =
+    Math.max(
+      0,
+      Math.ceil(
+        (protectionRemainingMs %
+          (60 * 60 * 1000)) /
+          (60 * 1000)
+      )
+    )
+
+  const protectionTimeLabel =
+    protectionRemainingMs > 0
+      ? `${protectionHours}h ${protectionMinutes}m`
+      : 'Protection window ended'
+
   const [product, setProduct] =
     useState<Product | null>(null)
 
@@ -112,14 +216,27 @@ export default function OrderScreen() {
     useState(false)
   const [shipping, setShipping] =
     useState(false)
-  const [receiving, setReceiving] =
+  const [selectedCarrier, setSelectedCarrier] =
+    useState<CarrierCode>('nova_poshta')
+  const [trackingInput, setTrackingInput] =
+    useState('')
+  const [confirmingDelivery, setConfirmingDelivery] =
     useState(false)
-  const [completing, setCompleting] =
+  const [disputing, setDisputing] =
     useState(false)
 
   useEffect(() => {
     loadOrderData()
   }, [id, orderId])
+
+  useEffect(() => {
+    const timer = setInterval(
+      () => setNow(Date.now()),
+      60 * 1000,
+    )
+
+    return () => clearInterval(timer)
+  }, [])
 
   async function loadOrderData() {
     try {
@@ -159,8 +276,27 @@ export default function OrderScreen() {
           await orderResponse.json()
 
         setOrder(orderResult.order)
+        setOrderReward(
+          orderResult.reward ?? null
+        )
+
+        if (
+          CARRIERS.some(
+            (item) =>
+              item.code === orderResult.order?.carrier,
+          )
+        ) {
+          setSelectedCarrier(
+            orderResult.order.carrier,
+          )
+        }
+
+        setTrackingInput(
+          orderResult.order?.trackingNumber || '',
+        )
       } else {
         setOrder(null)
+        setOrderReward(null)
       }
     } catch (error) {
       console.error(
@@ -262,6 +398,17 @@ export default function OrderScreen() {
       return
     }
 
+    const cleanTrackingNumber =
+      trackingInput.trim()
+
+    if (cleanTrackingNumber.length < 5) {
+      Alert.alert(
+        'Tracking number required',
+        'Enter the tracking number from the delivery carrier.',
+      )
+      return
+    }
+
     try {
       setShipping(true)
 
@@ -272,6 +419,11 @@ export default function OrderScreen() {
           headers: {
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            carrier: selectedCarrier,
+            trackingNumber:
+              cleanTrackingNumber,
+          }),
         }
       )
 
@@ -290,24 +442,32 @@ export default function OrderScreen() {
         'TEFTE shipping error:',
         error
       )
+
+      Alert.alert(
+        'Could not mark as shipped',
+        error instanceof Error
+          ? error.message
+          : 'Please try again.',
+      )
     } finally {
       setShipping(false)
     }
   }
-  async function confirmReceived() {
+
+  async function confirmDelivery() {
     if (
       !orderId ||
-      order?.status !== 'shipped' ||
+      order?.status !== 'delivered' ||
       isSeller
     ) {
       return
     }
 
     try {
-      setReceiving(true)
+      setConfirmingDelivery(true)
 
       const response = await fetch(
-        `${API_URL}/api/orders/${orderId}/buyer-received`,
+        `${API_URL}/api/orders/${orderId}/buyer-confirm`,
         {
           method: 'PATCH',
           headers: {
@@ -326,33 +486,49 @@ export default function OrderScreen() {
       }
 
       setOrder(result.order)
+      setOrderReward(
+        result.reward ?? null
+      )
     } catch (error) {
       console.error(
-        'TEFTE confirm received error:',
+        'TEFTE buyer confirm error:',
         error
       )
+
+      Alert.alert(
+        'Could not confirm delivery',
+        error instanceof Error
+          ? error.message
+          : 'Please try again.',
+      )
     } finally {
-      setReceiving(false)
+      setConfirmingDelivery(false)
     }
   }
-  async function completeOrder() {
+
+  async function submitDispute() {
     if (
       !orderId ||
-      order?.status !== 'received'
+      order?.status !== 'delivered' ||
+      isSeller
     ) {
       return
     }
 
     try {
-      setCompleting(true)
+      setDisputing(true)
 
       const response = await fetch(
-        `${API_URL}/api/orders/${orderId}/complete`,
+        `${API_URL}/api/orders/${orderId}/buyer-dispute`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            reason:
+              'Buyer opened a dispute from the TEFTE order screen',
+          }),
         }
       )
 
@@ -361,20 +537,46 @@ export default function OrderScreen() {
       if (!response.ok) {
         throw new Error(
           result?.error ||
-            'Could not complete order'
+            'Could not open dispute'
         )
       }
 
       setOrder(result.order)
     } catch (error) {
       console.error(
-        'TEFTE complete order error:',
+        'TEFTE dispute error:',
         error
       )
+
+      Alert.alert(
+        'Could not open dispute',
+        error instanceof Error
+          ? error.message
+          : 'Please try again.',
+      )
     } finally {
-      setCompleting(false)
+      setDisputing(false)
     }
   }
+
+  function openDispute() {
+    Alert.alert(
+      'Open a dispute?',
+      'Seller payment will be paused while the dispute is reviewed.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Open dispute',
+          style: 'destructive',
+          onPress: submitDispute,
+        },
+      ],
+    )
+  }
+
   function getImageUrl(
     image?: string
   ) {
@@ -444,10 +646,18 @@ export default function OrderScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
       >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
         <View style={styles.successIcon}>
           <Text style={styles.successIconText}>
             OK
@@ -463,11 +673,13 @@ export default function OrderScreen() {
                 ? 'Order confirmed'
                 : order?.status === 'shipped'
                   ? 'Order shipped'
-                  : order?.status === 'received'
-                    ? 'Item received'
-                    : order?.status === 'completed'
-                      ? 'Order completed'
-                      : 'Payment confirmed'}
+                  : order?.status === 'delivered'
+                    ? 'Delivered'
+                    : order?.status === 'disputed'
+                      ? 'Dispute opened'
+                      : order?.status === 'completed'
+                        ? 'Order completed'
+                        : 'Payment confirmed'}
         </Text>
 
         <Text style={styles.subtitle}>
@@ -478,12 +690,14 @@ export default function OrderScreen() {
               : order?.status === 'confirmed'
                 ? 'The seller confirmed your order.'
                 : order?.status === 'shipped'
-                  ? 'The seller marked your order as shipped.'
-                  : order?.status === 'received'
-                    ? 'Delivery has been confirmed.'
-                    : order?.status === 'completed'
-                      ? 'This TEFTE deal is complete.'
-                      : 'Waiting for the seller to confirm your order.'}
+                  ? 'Your order is on the way.'
+                  : order?.status === 'delivered'
+                    ? 'The carrier confirmed delivery. Your 48-hour protection window is active.'
+                    : order?.status === 'disputed'
+                      ? 'Seller payment is paused while this dispute is reviewed.'
+                      : order?.status === 'completed'
+                        ? 'This TEFTE deal is complete.'
+                        : 'Waiting for the seller to confirm your order.'}
         </Text>
         <View style={styles.productCard}>
           {mainImage ? (
@@ -522,21 +736,40 @@ export default function OrderScreen() {
           </View>
         </View>
 
-        {isSkrDemoReward ? (
+        {isSkrOrder ? (
           <View style={styles.skrRewardCard}>
-            <Text style={styles.skrRewardLabel}>
-              SKR PURCHASE COMPLETE
-            </Text>
+            {order?.status === 'completed' ? (
+              <>
+                <Text style={styles.skrRewardLabel}>
+                  SKR REWARD UNLOCKED
+                </Text>
 
-            <Text style={styles.skrRewardXp}>
-              +100 TEFTE XP
-            </Text>
+                <Text style={styles.skrRewardXp}>
+                  {orderReward
+                    ? `+${orderReward.xpAwarded} TEFTE XP`
+                    : 'TEFTE reward earned'}
+                </Text>
 
-            <Text style={styles.skrRewardText}>
-              1 Listing Boost earned
-            </Text>
+                <Text style={styles.skrRewardText}>
+                  {orderReward?.listingBoostsAwarded
+                    ? `+${orderReward.listingBoostsAwarded} Listing Boost`
+                    : 'Reward saved to your TEFTE profile'}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.skrRewardLabel}>
+                  SKR REWARDS PENDING
+                </Text>
+
+                <Text style={styles.skrRewardText}>
+                  Rewards unlock only after the order is completed.
+                </Text>
+              </>
+            )}
           </View>
         ) : null}
+
         <View style={styles.protectionCard}>
           <View style={styles.protectionHeader}>
             <View style={styles.shield}>
@@ -557,8 +790,11 @@ export default function OrderScreen() {
           </View>
 
           <Text style={styles.protectionText}>
-            TEFTE tracks the deal from payment
-            through delivery and completion.
+            After the carrier confirms delivery,
+            the buyer has 48 hours to confirm the
+            item or open a dispute. If no dispute
+            is opened, TEFTE completes the order
+            automatically.
           </Text>
         </View>
 
@@ -680,7 +916,9 @@ export default function OrderScreen() {
               </Text>
 
               <Text style={styles.stepDescription}>
-                Seller ships the item
+                {order?.trackingNumber
+                  ? `${getCarrierLabel(order.carrier)} · ${order.trackingNumber}`
+                  : 'Seller ships the item'}
               </Text>
             </View>
           </View>
@@ -691,34 +929,92 @@ export default function OrderScreen() {
             <View
               style={[
                 styles.stepCircle,
-                orderReceived &&
+                orderDelivered &&
                   styles.stepCircleActive,
               ]}
             >
               <Text
                 style={
-                  orderReceived
+                  orderDelivered
                     ? styles.stepCheck
                     : styles.stepNumber
                 }
               >
-                {orderReceived ? 'OK' : '4'}
+                {orderDelivered ? 'OK' : '4'}
               </Text>
             </View>
 
             <View style={styles.stepContent}>
               <Text
                 style={
-                  orderReceived
+                  orderDelivered
                     ? styles.stepTitleActive
                     : styles.stepTitle
                 }
               >
-                Received
+                Delivered
               </Text>
 
               <Text style={styles.stepDescription}>
-                Buyer confirms delivery
+                Carrier confirms delivery
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.stepLine} />
+
+          <View style={styles.step}>
+            <View
+              style={[
+                styles.stepCircle,
+                (order?.status === 'delivered' ||
+                  orderDisputed ||
+                  orderCompleted) &&
+                  styles.stepCircleActive,
+              ]}
+            >
+              <Text
+                style={
+                  order?.status === 'delivered' ||
+                  orderDisputed ||
+                  orderCompleted
+                    ? styles.stepCheck
+                    : styles.stepNumber
+                }
+              >
+                {orderCompleted
+                  ? 'OK'
+                  : orderDisputed
+                    ? '!'
+                    : '5'}
+              </Text>
+            </View>
+
+            <View style={styles.stepContent}>
+              <Text
+                style={
+                  order?.status === 'delivered' ||
+                  orderDisputed ||
+                  orderCompleted
+                    ? styles.stepTitleActive
+                    : styles.stepTitle
+                }
+              >
+                {orderDisputed
+                  ? 'Dispute opened'
+                  : orderCompleted
+                    ? 'Protection complete'
+                    : '48h protection'}
+              </Text>
+
+              <Text style={styles.stepDescription}>
+                {orderDisputed
+                  ? 'Seller payment is paused'
+                  : order?.status === 'delivered'
+                    ? `${protectionTimeLabel} remaining`
+                    : orderCompleted
+                      ? 'Buyer confirmed or timer ended'
+                      : 'Starts after delivery'}
               </Text>
             </View>
           </View>
@@ -740,7 +1036,7 @@ export default function OrderScreen() {
                     : styles.stepNumber
                 }
               >
-                {orderCompleted ? 'OK' : '5'}
+                {orderCompleted ? 'OK' : '6'}
               </Text>
             </View>
 
@@ -761,10 +1057,43 @@ export default function OrderScreen() {
             </View>
           </View>
         </View>
+
+        {order?.trackingNumber ? (
+          <View style={styles.trackingCard}>
+            <View style={styles.trackingHeader}>
+              <Text style={styles.trackingTitle}>
+                Delivery tracking
+              </Text>
+
+              <View style={styles.trackingStatusPill}>
+                <Text style={styles.trackingStatusText}>
+                  {order.status === 'delivered' ||
+                  order.status === 'disputed' ||
+                  order.status === 'completed'
+                    ? 'DELIVERED'
+                    : 'IN TRANSIT'}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.trackingCarrier}>
+              {getCarrierLabel(order.carrier)}
+            </Text>
+
+            <Text style={styles.trackingNumber}>
+              {order.trackingNumber}
+            </Text>
+
+            <Text style={styles.trackingHint}>
+              TEFTE will use the carrier status to confirm delivery.
+            </Text>
+          </View>
+        ) : null}
+
         {signature ? (
           <View style={styles.transactionCard}>
             <Text style={styles.transactionLabel}>
-              {isSkrDemoReward ? 'SKR demo reference' : 'Solana transaction'}
+              {isSkrOrder ? 'SKR demo reference' : 'Solana transaction'}
             </Text>
 
             <Text
@@ -791,18 +1120,22 @@ export default function OrderScreen() {
                   ? 'Prepare the item and mark the order as shipped when it is on the way.'
                   : 'The seller confirmed your order and is preparing it for shipment.'
                 : order?.status === 'shipped'
-                  ? isSeller
-                    ? 'The order is marked as shipped. Waiting for the buyer to confirm delivery.'
-                    : 'Your order is on the way. Confirm received after it arrives.'
-                  : order?.status === 'received'
-                    ? 'Delivery has been confirmed. Complete the order to finish the TEFTE workflow.'
-                    : order?.status === 'completed'
-                      ? 'This TEFTE deal is complete.'
-                      : order?.status === 'cancelled_by_buyer'
-                        ? 'This order was cancelled before seller confirmation.'
-                        : order?.status === 'declined_by_seller'
-                          ? 'The seller declined this order.'
-                          : 'TEFTE will keep the order status visible here.'}
+                  ? 'The order is on the way. TEFTE will start the 48-hour protection window only after the carrier confirms delivery.'
+                  : order?.status === 'delivered'
+                    ? isSeller
+                      ? `Delivery is confirmed. Buyer protection ends in ${protectionTimeLabel}.`
+                      : `Delivery is confirmed. Confirm the item or open a dispute within ${protectionTimeLabel}.`
+                    : order?.status === 'disputed'
+                      ? 'The dispute is open. Seller payment is paused until the dispute is resolved.'
+                      : order?.status === 'completed'
+                        ? order?.completionReason === 'auto_completed_after_48h'
+                          ? 'The 48-hour protection window ended with no dispute, so the order was completed automatically.'
+                          : 'This TEFTE deal is complete.'
+                        : order?.status === 'cancelled_by_buyer'
+                          ? 'This order was cancelled before seller confirmation.'
+                          : order?.status === 'declined_by_seller'
+                            ? 'The seller declined this order.'
+                            : 'TEFTE will keep the order status visible here.'}
           </Text>
         </View>
         {order?.status === 'waiting_seller' &&
@@ -836,46 +1169,122 @@ export default function OrderScreen() {
           </View>
         ) : null}
 
-        {order?.status === 'received' ? (
-          <Pressable
-            style={styles.confirmButton}
-            onPress={completeOrder}
-            disabled={completing}
-          >
-            <Text style={styles.confirmButtonText}>
-              {completing
-                ? 'Completing...'
-                : 'Complete order'}
-            </Text>
-          </Pressable>
-        ) : null}
-        {order?.status === 'shipped' &&
+        {order?.status === 'delivered' &&
         !isSeller ? (
-          <Pressable
-            style={styles.confirmButton}
-            onPress={confirmReceived}
-            disabled={receiving}
-          >
-            <Text style={styles.confirmButtonText}>
-              {receiving
-                ? 'Updating...'
-                : 'Confirm received'}
-            </Text>
-          </Pressable>
+          <View style={styles.buyerDeliveryActions}>
+            <Pressable
+              style={styles.confirmButton}
+              onPress={confirmDelivery}
+              disabled={
+                confirmingDelivery || disputing
+              }
+            >
+              <Text style={styles.confirmButtonText}>
+                {confirmingDelivery
+                  ? 'Confirming...'
+                  : 'Confirm received'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.disputeButton}
+              onPress={openDispute}
+              disabled={
+                confirmingDelivery || disputing
+              }
+            >
+              <Text style={styles.disputeButtonText}>
+                {disputing
+                  ? 'Opening dispute...'
+                  : 'Open dispute'}
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
+
         {order?.status === 'confirmed' &&
         isSeller ? (
-          <Pressable
-            style={styles.confirmButton}
-            onPress={markAsShipped}
-            disabled={shipping}
-          >
-            <Text style={styles.confirmButtonText}>
-              {shipping
-                ? 'Updating...'
-                : 'Mark as shipped'}
+          <View style={styles.shippingForm}>
+            <Text style={styles.shippingFormTitle}>
+              Delivery details
             </Text>
-          </Pressable>
+
+            <Text style={styles.shippingFormHint}>
+              Choose the carrier and enter the tracking number before marking the order as shipped.
+            </Text>
+
+            <View style={styles.carrierOptions}>
+              {CARRIERS.map((carrier) => {
+                const selected =
+                  selectedCarrier === carrier.code
+
+                return (
+                  <Pressable
+                    key={carrier.code}
+                    style={[
+                      styles.carrierOption,
+                      selected &&
+                        styles.carrierOptionSelected,
+                    ]}
+                    onPress={() =>
+                      setSelectedCarrier(
+                        carrier.code,
+                      )
+                    }
+                    disabled={shipping}
+                  >
+                    <Text
+                      style={[
+                        styles.carrierOptionText,
+                        selected &&
+                          styles.carrierOptionTextSelected,
+                      ]}
+                    >
+                      {carrier.label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+
+            <TextInput
+              style={styles.trackingInput}
+              value={trackingInput}
+              onChangeText={setTrackingInput}
+              placeholder="Tracking number / TTN"
+              placeholderTextColor="#999999"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!shipping}
+              maxLength={64}
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollRef.current?.scrollToEnd({
+                    animated: true,
+                  })
+                }, 180)
+              }}
+            />
+
+            <Pressable
+              style={[
+                styles.confirmButton,
+                trackingInput.trim().length < 5 &&
+                  styles.confirmButtonDisabled,
+              ]}
+              onPress={markAsShipped}
+              disabled={
+                shipping ||
+                trackingInput.trim().length < 5
+              }
+            >
+              <Text style={styles.confirmButtonText}>
+                {shipping
+                  ? 'Saving shipment...'
+                  : 'Mark as shipped'}
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
         {order?.status === 'waiting_seller' &&
         !isSeller ? (
@@ -901,9 +1310,10 @@ export default function OrderScreen() {
         </Pressable>
 
         <Text style={styles.footer}>
-          {'Paid > Seller confirmed > Shipped > Received > Seller paid'}
+          {'Paid > Seller confirmed > Shipped > Delivered > 48h protection > Seller paid'}
         </Text>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
@@ -935,6 +1345,151 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#5E5670',
   },
+  shippingForm: {
+    marginTop: 4,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+  },
+
+  shippingFormTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111111',
+  },
+
+  shippingFormHint: {
+    marginTop: 5,
+    marginBottom: 12,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#6F6F6F',
+  },
+
+  carrierOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  carrierOption: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DDDDD8',
+    backgroundColor: '#F7F7F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  carrierOptionSelected: {
+    borderColor: '#111111',
+    backgroundColor: '#111111',
+  },
+
+  carrierOptionText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#555555',
+  },
+
+  carrierOptionTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  trackingInput: {
+    minHeight: 50,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DDDDD8',
+    backgroundColor: '#FAFAF8',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111111',
+  },
+
+  confirmButtonDisabled: {
+    opacity: 0.45,
+  },
+
+  trackingCard: {
+    marginTop: 16,
+    padding: 18,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+  },
+
+  trackingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  trackingTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#111111',
+  },
+
+  trackingStatusPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF3',
+  },
+
+  trackingStatusText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#15803D',
+  },
+
+  trackingCarrier: {
+    marginTop: 12,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#666666',
+  },
+
+  trackingNumber: {
+    marginTop: 4,
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#111111',
+  },
+
+  trackingHint: {
+    marginTop: 8,
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#777777',
+  },
+
+  buyerDeliveryActions: {
+    gap: 10,
+    marginTop: 4,
+  },
+
+  disputeButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#D92D20',
+  },
+
+  disputeButtonText: {
+    color: '#B42318',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
   sellerActions: {
     gap: 10,
     marginTop: 4,
@@ -972,6 +1527,10 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#F7F7F7',
+  },
+
+  keyboardAvoider: {
+    flex: 1,
   },
 
   content: {

@@ -1,4 +1,4 @@
-﻿import { API_URL } from '../../lib/api'
+import { API_URL } from '../../lib/api'
 import { useCallback, useState } from 'react'
 import {
   ActivityIndicator,
@@ -20,6 +20,8 @@ import * as ImagePicker from 'expo-image-picker'
 
 type ListingStatus = 'active' | 'sold'
 
+type ProfileSection = 'rewards' | 'purchases' | 'sales' | 'listings' | null
+
 type EditPhoto = {
   id: string
   uri: string
@@ -40,6 +42,9 @@ type Product = {
   status?: ListingStatus
   imageUrl?: string | null
   imageUrls?: string[]
+  boostedAt?: string | null
+  boostedUntil?: string | null
+  boostedBy?: string | null
 }
 
 type OrderStatus =
@@ -95,6 +100,36 @@ function getProductImage(product: Product) {
   }
 
   return `${API_URL}${rawImage}`
+}
+
+function isProductBoostActive(product: Product) {
+  if (!product.boostedUntil) {
+    return false
+  }
+
+  const boostedUntil =
+    new Date(product.boostedUntil).getTime()
+
+  return (
+    Number.isFinite(boostedUntil) &&
+    boostedUntil > Date.now() &&
+    (product.status || 'active') === 'active'
+  )
+}
+
+function getBoostTimeLabel(product: Product) {
+  if (!isProductBoostActive(product) || !product.boostedUntil) {
+    return ''
+  }
+
+  const remainingMs =
+    new Date(product.boostedUntil).getTime() -
+    Date.now()
+
+  const remainingHours =
+    Math.max(1, Math.ceil(remainingMs / (60 * 60 * 1000)))
+
+  return `${remainingHours}h left`
 }
 
 function shortAddress(address?: string) {
@@ -156,6 +191,8 @@ export default function ProfileScreen() {
   const [orders, setOrders] = useState<Order[]>([])
   const [serverRewards, setServerRewards] =
     useState<RewardsAccount | null>(null)
+  const [openSection, setOpenSection] =
+    useState<ProfileSection>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -556,6 +593,133 @@ export default function ProfileScreen() {
     }
   }
 
+  const boostListing = async (product: Product) => {
+    if (!walletAddress) {
+      Alert.alert(
+        'Connect wallet',
+        'Connect your wallet before using a Listing Boost.',
+      )
+      return
+    }
+
+    if ((product.status || 'active') !== 'active') {
+      Alert.alert(
+        'Listing is not active',
+        'Only active listings can be boosted.',
+      )
+      return
+    }
+
+    if (isProductBoostActive(product)) {
+      Alert.alert(
+        'Already boosted',
+        `This listing already has an active boost (${getBoostTimeLabel(product)}).`,
+      )
+      return
+    }
+
+    if (listingBoosts < 1) {
+      Alert.alert(
+        'No Listing Boosts',
+        'Complete an eligible SKR purchase to earn a Listing Boost.',
+      )
+      return
+    }
+
+    setActionId(product.id)
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/products/${encodeURIComponent(product.id)}/boost`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            wallet: walletAddress,
+          }),
+        },
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || 'Could not boost listing.',
+        )
+      }
+
+      if (data?.product) {
+        setProducts((current) =>
+          current.map((item) =>
+            item.id === product.id
+              ? {
+                  ...item,
+                  ...data.product,
+                }
+              : item,
+          ),
+        )
+      }
+
+      if (data?.rewards) {
+        setServerRewards((current) => ({
+          ...(current || {
+            wallet: walletAddress,
+            xp: 0,
+            listingBoosts: 0,
+            completedSkrPurchases: 0,
+          }),
+          ...data.rewards,
+        }))
+      } else {
+        await loadRewards()
+      }
+
+      Alert.alert(
+        'Listing boosted',
+        'This listing is promoted for the next 24 hours.',
+      )
+    } catch (err) {
+      console.error(
+        'Boost listing error:',
+        err,
+      )
+
+      Alert.alert(
+        'Could not boost listing',
+        err instanceof Error
+          ? err.message
+          : 'Please try again.',
+      )
+    } finally {
+      setActionId(null)
+    }
+  }
+
+  const askBoostListing = (product: Product) => {
+    const title =
+      product.title.length > 42
+        ? `${product.title.slice(0, 39)}...`
+        : product.title
+
+    Alert.alert(
+      'Use 1 Listing Boost?',
+      `Boost "${title}" for 24 hours?\n\nAvailable boosts: ${listingBoosts}`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Use Boost',
+          onPress: () => boostListing(product),
+        },
+      ],
+    )
+  }
+
   const askChangeStatus = (product: Product) => {
     const currentStatus: ListingStatus = product.status || 'active'
     const nextStatus: ListingStatus =
@@ -681,12 +845,22 @@ export default function ProfileScreen() {
       myProductIds.has(order.productId),
   )
 
+  const salesActionNeededCount = mySales.filter(
+    (order) => order.status === 'waiting_seller',
+  ).length
+
   const activeCount = products.filter(
     (product) => (product.status || 'active') === 'active',
   ).length
   const soldCount = products.filter(
     (product) => product.status === 'sold',
   ).length
+
+  const toggleSection = (section: Exclude<ProfileSection, null>) => {
+    setOpenSection((current) =>
+      current === section ? null : section,
+    )
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -800,9 +974,41 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>TEFTE Rewards</Text>
+        <View style={styles.accordionSection}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.accordionHeader,
+              pressed && styles.accordionPressed,
+            ]}
+            onPress={() => toggleSection('rewards')}
+          >
+            <View style={styles.accordionHeaderText}>
+              <Text style={styles.accordionTitle}>TEFTE Rewards</Text>
+              <Text style={styles.accordionSummary} numberOfLines={1}>
+                Level {xpLevel.level} · {tefteXp} XP · {listingBoosts} Boosts
+              </Text>
+            </View>
 
-        <View style={styles.rewardsPanel}>
+            <View style={styles.accordionRight}>
+              <View style={styles.compactRewardBadge}>
+                <Text style={styles.compactRewardBadgeText}>
+                  {completedSkrPurchases > 0
+                    ? 'ACTIVE'
+                    : pendingSkrPurchases.length > 0
+                      ? 'PENDING'
+                      : 'READY'}
+                </Text>
+              </View>
+
+              <Text style={styles.accordionChevron}>
+                {openSection === 'rewards' ? '⌃' : '⌄'}
+              </Text>
+            </View>
+          </Pressable>
+
+          {openSection === 'rewards' ? (
+            <View style={styles.accordionBody}>
+              <View style={styles.rewardsPanel}>
           <View style={styles.rewardHeader}>
             <View style={styles.rewardIcon}>
               <Text style={styles.rewardEmoji}>XP</Text>
@@ -1013,24 +1219,40 @@ export default function ProfileScreen() {
 
           <Text style={styles.comingSoon}>Later</Text>
         </View>
-
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>
-              My purchases
-            </Text>
-            <Text style={styles.sectionSubtitle}>
-              Orders you placed on TEFTE
-            </Text>
-          </View>
-
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>
-              {myPurchases.length}
-            </Text>
-          </View>
+            </View>
+          ) : null}
         </View>
 
+        <View style={styles.accordionSection}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.accordionHeader,
+              pressed && styles.accordionPressed,
+            ]}
+            onPress={() => toggleSection('purchases')}
+          >
+            <View style={styles.accordionHeaderText}>
+              <Text style={styles.accordionTitle}>My purchases</Text>
+              <Text style={styles.accordionSummary}>
+                Orders you placed on TEFTE
+              </Text>
+            </View>
+
+            <View style={styles.accordionRight}>
+              <View style={styles.countBadge}>
+                <Text style={styles.countText}>
+                  {myPurchases.length}
+                </Text>
+              </View>
+
+              <Text style={styles.accordionChevron}>
+                {openSection === 'purchases' ? '⌃' : '⌄'}
+              </Text>
+            </View>
+          </Pressable>
+
+          {openSection === 'purchases' ? (
+            <View style={styles.accordionBody}>
         {myPurchases.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.stateTitle}>
@@ -1093,23 +1315,304 @@ export default function ProfileScreen() {
             </Pressable>
           ))
         )}
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>
-              Sales
-            </Text>
-            <Text style={styles.sectionSubtitle}>
-              Orders placed on your listings
-            </Text>
-          </View>
-
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>
-              {mySales.length}
-            </Text>
-          </View>
+            </View>
+          ) : null}
         </View>
 
+        <View style={styles.accordionSection}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.accordionHeader,
+              pressed && styles.accordionPressed,
+            ]}
+            onPress={() => toggleSection('listings')}
+          >
+            <View style={styles.accordionHeaderText}>
+              <Text style={styles.accordionTitle}>My listings</Text>
+              <Text style={styles.accordionSummary}>
+                Manage products you published
+              </Text>
+            </View>
+
+            <View style={styles.accordionRight}>
+              {!loading && !error ? (
+                <View style={styles.countBadge}>
+                  <Text style={styles.countText}>{products.length}</Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.accordionChevron}>
+                {openSection === 'listings' ? '⌃' : '⌄'}
+              </Text>
+            </View>
+          </Pressable>
+
+          {openSection === 'listings' ? (
+            <View style={styles.accordionBody}>
+        {loading ? (
+          <View style={styles.stateBox}>
+            <ActivityIndicator size="small" />
+            <Text style={styles.stateText}>Loading your listings...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.stateBox}>
+            <Text style={styles.stateTitle}>Could not load listings</Text>
+            <Text style={styles.stateText}>{error}</Text>
+
+            <Pressable
+              style={styles.retryButton}
+              onPress={() => loadProducts()}
+            >
+              <Text style={styles.retryButtonText}>Try again</Text>
+            </Pressable>
+          </View>
+        ) : products.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyEmoji}>+</Text>
+            <Text style={styles.emptyTitle}>No listings yet</Text>
+            <Text style={styles.emptyText}>
+              Take a few photos and let TEFTE AI help create your first
+              listing.
+            </Text>
+
+            <Pressable
+              style={styles.sellButton}
+              onPress={() => router.push('/(tabs)/sell')}
+            >
+              <Text style={styles.sellButtonText}>Sell an item</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {products.map((product) => {
+              const image = getProductImage(product)
+              const status: ListingStatus = product.status || 'active'
+              const busy = actionId === product.id
+              const boostActive = isProductBoostActive(product)
+              const boostTimeLabel = getBoostTimeLabel(product)
+
+              return (
+                <View key={product.id} style={styles.productCard}>
+                  <Pressable
+                    style={styles.productMain}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/product/[id]',
+                        params: { id: product.id },
+                      })
+                    }
+                  >
+                    {image ? (
+                      <Image
+                        source={{ uri: image }}
+                        style={[
+                          styles.productImage,
+                          status === 'sold' && styles.soldImage,
+                        ]}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.productPlaceholder}>
+                        <Text style={styles.placeholderLogo}>TEFTE</Text>
+                        <Text style={styles.placeholderText}>No photo</Text>
+                      </View>
+                    )}
+
+                    <View style={styles.productInfo}>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          status === 'sold'
+                            ? styles.soldBadge
+                            : styles.activeBadge,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.statusBadgeDot,
+                            status === 'sold'
+                              ? styles.soldDot
+                              : styles.activeDot,
+                          ]}
+                        />
+
+                        <Text
+                          style={[
+                            styles.statusBadgeText,
+                            status === 'sold'
+                              ? styles.soldText
+                              : styles.activeText,
+                          ]}
+                        >
+                          {status === 'sold' ? 'Sold' : 'Active'}
+                        </Text>
+                      </View>
+
+                      {boostActive ? (
+                        <View style={styles.boostedBadge}>
+                          <Text style={styles.boostedBadgeText}>
+                            BOOSTED · {boostTimeLabel}
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      <Text style={styles.productTitle} numberOfLines={2}>
+                        {product.title}
+                      </Text>
+
+                      <Text style={styles.productMeta} numberOfLines={1}>
+                        {[product.category, product.condition]
+                          .filter(Boolean)
+                          .join(' | ')}
+                      </Text>
+
+                      <View style={styles.productBottom}>
+                        <Text style={styles.productPrice}>
+                          {product.price} {product.currency || 'USDC'}
+                        </Text>
+
+                        <Text style={styles.arrow}>{'>'}</Text>
+                      </View>
+                    </View>
+                  </Pressable>
+
+                  <View style={styles.boostControlWrap}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.boostButton,
+                        (busy ||
+                          status === 'sold' ||
+                          boostActive ||
+                          listingBoosts < 1 ||
+                          !walletAddress) &&
+                          styles.boostButtonDisabled,
+                        pressed &&
+                          !busy &&
+                          status !== 'sold' &&
+                          !boostActive &&
+                          listingBoosts > 0 &&
+                          Boolean(walletAddress) &&
+                          styles.controlPressed,
+                      ]}
+                      disabled={
+                        busy ||
+                        status === 'sold' ||
+                        boostActive ||
+                        listingBoosts < 1 ||
+                        !walletAddress
+                      }
+                      onPress={() => askBoostListing(product)}
+                    >
+                      <Text
+                        style={[
+                          styles.boostButtonText,
+                          (status === 'sold' ||
+                            boostActive ||
+                            listingBoosts < 1 ||
+                            !walletAddress) &&
+                            styles.boostButtonTextDisabled,
+                        ]}
+                      >
+                        {busy
+                          ? 'Working...'
+                          : boostActive
+                            ? `Boosted · ${boostTimeLabel}`
+                            : status === 'sold'
+                              ? 'Boost unavailable'
+                              : listingBoosts < 1
+                                ? 'No Boosts available'
+                                : 'Use 1 Boost · 24h'}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.controls}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.controlButton,
+                        pressed && styles.controlPressed,
+                      ]}
+                      disabled={busy}
+                      onPress={() => openEdit(product)}
+                    >
+                      <Text style={styles.controlButtonText}>Edit</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.controlButton,
+                        pressed && styles.controlPressed,
+                      ]}
+                      disabled={busy}
+                      onPress={() => askChangeStatus(product)}
+                    >
+                      <Text style={styles.controlButtonText}>
+                        {busy
+                          ? 'Working...'
+                          : status === 'sold'
+                            ? 'Make active'
+                            : 'Mark as sold'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.deleteButton,
+                        pressed && styles.controlPressed,
+                      ]}
+                      disabled={busy}
+                      onPress={() => askDelete(product)}
+                    >
+                      <Text style={styles.deleteButtonText}>Delete</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        )}
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.accordionSection}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.accordionHeader,
+              pressed && styles.accordionPressed,
+            ]}
+            onPress={() => toggleSection('sales')}
+          >
+            <View style={styles.accordionHeaderText}>
+              <Text style={styles.accordionTitle}>Sales</Text>
+              <Text style={styles.accordionSummary}>
+                Orders placed on your listings
+              </Text>
+            </View>
+
+            <View style={styles.accordionRight}>
+              {salesActionNeededCount > 0 ? (
+                <View style={styles.actionNeededPill}>
+                  <Text style={styles.actionNeededPillText}>
+                    {salesActionNeededCount} action
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.countBadge}>
+                <Text style={styles.countText}>
+                  {mySales.length}
+                </Text>
+              </View>
+
+              <Text style={styles.accordionChevron}>
+                {openSection === 'sales' ? '⌃' : '⌄'}
+              </Text>
+            </View>
+          </Pressable>
+
+          {openSection === 'sales' ? (
+            <View style={styles.accordionBody}>
         {mySales.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.stateTitle}>
@@ -1173,183 +1676,9 @@ export default function ProfileScreen() {
             </Pressable>
           ))
         )}
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>My Listings</Text>
-            <Text style={styles.sectionSubtitle}>
-              Manage products you published on TEFTE
-            </Text>
-          </View>
-
-          {!loading && !error ? (
-            <View style={styles.countBadge}>
-              <Text style={styles.countText}>{products.length}</Text>
             </View>
           ) : null}
         </View>
-
-        {loading ? (
-          <View style={styles.stateBox}>
-            <ActivityIndicator size="small" />
-            <Text style={styles.stateText}>Loading your listings...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.stateBox}>
-            <Text style={styles.stateTitle}>Could not load listings</Text>
-            <Text style={styles.stateText}>{error}</Text>
-
-            <Pressable
-              style={styles.retryButton}
-              onPress={() => loadProducts()}
-            >
-              <Text style={styles.retryButtonText}>Try again</Text>
-            </Pressable>
-          </View>
-        ) : products.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>+</Text>
-            <Text style={styles.emptyTitle}>No listings yet</Text>
-            <Text style={styles.emptyText}>
-              Take a few photos and let TEFTE AI help create your first
-              listing.
-            </Text>
-
-            <Pressable
-              style={styles.sellButton}
-              onPress={() => router.push('/(tabs)/sell')}
-            >
-              <Text style={styles.sellButtonText}>Sell an item</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.list}>
-            {products.map((product) => {
-              const image = getProductImage(product)
-              const status: ListingStatus = product.status || 'active'
-              const busy = actionId === product.id
-
-              return (
-                <View key={product.id} style={styles.productCard}>
-                  <Pressable
-                    style={styles.productMain}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/product/[id]',
-                        params: { id: product.id },
-                      })
-                    }
-                  >
-                    {image ? (
-                      <Image
-                        source={{ uri: image }}
-                        style={[
-                          styles.productImage,
-                          status === 'sold' && styles.soldImage,
-                        ]}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.productPlaceholder}>
-                        <Text style={styles.placeholderLogo}>TEFTE</Text>
-                        <Text style={styles.placeholderText}>No photo</Text>
-                      </View>
-                    )}
-
-                    <View style={styles.productInfo}>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          status === 'sold'
-                            ? styles.soldBadge
-                            : styles.activeBadge,
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.statusBadgeDot,
-                            status === 'sold'
-                              ? styles.soldDot
-                              : styles.activeDot,
-                          ]}
-                        />
-
-                        <Text
-                          style={[
-                            styles.statusBadgeText,
-                            status === 'sold'
-                              ? styles.soldText
-                              : styles.activeText,
-                          ]}
-                        >
-                          {status === 'sold' ? 'Sold' : 'Active'}
-                        </Text>
-                      </View>
-
-                      <Text style={styles.productTitle} numberOfLines={2}>
-                        {product.title}
-                      </Text>
-
-                      <Text style={styles.productMeta} numberOfLines={1}>
-                        {[product.category, product.condition]
-                          .filter(Boolean)
-                          .join(' | ')}
-                      </Text>
-
-                      <View style={styles.productBottom}>
-                        <Text style={styles.productPrice}>
-                          {product.price} {product.currency || 'USDC'}
-                        </Text>
-
-                        <Text style={styles.arrow}>{'>'}</Text>
-                      </View>
-                    </View>
-                  </Pressable>
-
-                  <View style={styles.controls}>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.controlButton,
-                        pressed && styles.controlPressed,
-                      ]}
-                      disabled={busy}
-                      onPress={() => openEdit(product)}
-                    >
-                      <Text style={styles.controlButtonText}>Edit</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.controlButton,
-                        pressed && styles.controlPressed,
-                      ]}
-                      disabled={busy}
-                      onPress={() => askChangeStatus(product)}
-                    >
-                      <Text style={styles.controlButtonText}>
-                        {busy
-                          ? 'Working...'
-                          : status === 'sold'
-                            ? 'Make active'
-                            : 'Mark as sold'}
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.deleteButton,
-                        pressed && styles.controlPressed,
-                      ]}
-                      disabled={busy}
-                      onPress={() => askDelete(product)}
-                    >
-                      <Text style={styles.deleteButtonText}>Delete</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              )
-            })}
-          </View>
-        )}
 
         <View style={styles.bottomSpace} />
       </ScrollView>
@@ -2098,6 +2427,97 @@ const styles = StyleSheet.create({
     color: '#777777',
   },
 
+  accordionSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+
+  accordionHeader: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+
+  accordionPressed: {
+    opacity: 0.72,
+  },
+
+  accordionHeaderText: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 10,
+  },
+
+  accordionTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#111111',
+  },
+
+  accordionSummary: {
+    marginTop: 3,
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#7A7A7A',
+  },
+
+  accordionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+
+  actionNeededPill: {
+    minHeight: 25,
+    marginRight: 6,
+    paddingHorizontal: 8,
+    borderRadius: 13,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  actionNeededPillText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+
+  accordionChevron: {
+    width: 22,
+    marginLeft: 8,
+    fontSize: 20,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: '#555555',
+    textAlign: 'center',
+  },
+
+  accordionBody: {
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+
+  compactRewardBadge: {
+    minHeight: 25,
+    paddingHorizontal: 9,
+    borderRadius: 13,
+    backgroundColor: '#F4F7F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  compactRewardBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#4F7D58',
+  },
+
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2327,6 +2747,50 @@ const styles = StyleSheet.create({
   arrow: {
     fontSize: 20,
     color: '#777777',
+  },
+
+  boostedBadge: {
+    alignSelf: 'flex-start',
+    marginBottom: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#111111',
+  },
+
+  boostedBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+
+  boostControlWrap: {
+    paddingHorizontal: 10,
+    paddingBottom: 7,
+  },
+
+  boostButton: {
+    minHeight: 42,
+    borderRadius: 13,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+
+  boostButtonDisabled: {
+    backgroundColor: '#E9E9E5',
+  },
+
+  boostButtonText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+
+  boostButtonTextDisabled: {
+    color: '#888888',
   },
 
   controls: {

@@ -9,6 +9,13 @@ const products = require('./products.json')
 const app = express()
 const PORT = 3000
 
+const SUPPORTED_CARRIERS = {
+  nova_poshta: 'Nova Poshta',
+  ukrposhta: 'Ukrposhta',
+  meest: 'Meest',
+}
+const DELIVERY_PROTECTION_MS = 48 * 60 * 60 * 1000
+
 const USER_PRODUCTS_FILE = path.join(__dirname, 'user-products.json')
 const CHAT_MESSAGES_FILE = path.join(
   __dirname,
@@ -192,8 +199,49 @@ const chatMessages = loadChatMessages()
 const orders = loadOrders()
 const rewards = loadRewards()
 
+function isBoostActive(product) {
+  if (!product?.boostedUntil) {
+    return false
+  }
+
+  const boostedUntil =
+    new Date(product.boostedUntil).getTime()
+
+  return (
+    Number.isFinite(boostedUntil) &&
+    boostedUntil > Date.now() &&
+    (product.status || 'active') === 'active'
+  )
+}
+
 function getAllProducts() {
   return [...userProducts, ...products]
+    .map((product, index) => ({
+      product,
+      index,
+    }))
+    .sort((a, b) => {
+      const aBoosted = isBoostActive(a.product)
+      const bBoosted = isBoostActive(b.product)
+
+      if (aBoosted !== bBoosted) {
+        return aBoosted ? -1 : 1
+      }
+
+      if (aBoosted && bBoosted) {
+        const aTime =
+          new Date(a.product.boostedAt || 0).getTime()
+        const bTime =
+          new Date(b.product.boostedAt || 0).getTime()
+
+        if (aTime !== bTime) {
+          return bTime - aTime
+        }
+      }
+
+      return a.index - b.index
+    })
+    .map(({ product }) => product)
 }
 
 function isSkrPayment(order) {
@@ -408,6 +456,152 @@ function syncCompletedSkrRewards(
 
 // Backfill any completed SKR orders that existed before rewards.json.
 syncCompletedSkrRewards()
+
+function getRewardForOrder(order) {
+  if (!order || !isRewardableBuyer(order)) {
+    return null
+  }
+
+  const account =
+    getRewardAccount(order.buyer)
+
+  if (!account || !Array.isArray(account.history)) {
+    return null
+  }
+
+  return (
+    account.history.find(
+      (item) => item.orderId === order.id
+    ) || null
+  )
+}
+
+function finalizeOrder(
+  order,
+  completionReason = 'buyer_confirmed'
+) {
+  if (!order) {
+    return null
+  }
+
+  if (order.status === 'completed') {
+    return {
+      order,
+      reward: getRewardForOrder(order),
+      rewards:
+        isRewardableBuyer(order)
+          ? getRewardAccount(order.buyer)
+          : null,
+    }
+  }
+
+  order.status = 'completed'
+  order.completedAt =
+    new Date().toISOString()
+  order.completionReason =
+    completionReason
+  order.updatedAt =
+    order.completedAt
+
+  saveOrders()
+
+  const rewardResult =
+    applySkrReward(order)
+
+  console.log(
+    'TEFTE order completed:',
+    order.id,
+    completionReason
+  )
+
+  if (
+    rewardResult &&
+    !rewardResult.alreadyRewarded
+  ) {
+    console.log(
+      'TEFTE SKR reward:',
+      order.buyer,
+      `+${rewardResult.reward.xpAwarded} XP`,
+      `+${rewardResult.reward.listingBoostsAwarded} boost`
+    )
+  }
+
+  return {
+    order,
+    reward:
+      rewardResult?.reward ||
+      getRewardForOrder(order),
+    rewards:
+      rewardResult?.account ||
+      (isRewardableBuyer(order)
+        ? getRewardAccount(order.buyer)
+        : null),
+  }
+}
+
+function processAutoCompletions() {
+  const now = Date.now()
+  let completedCount = 0
+
+  for (const order of orders) {
+    if (
+      order.status !== 'delivered' ||
+      !order.protectionEndsAt
+    ) {
+      continue
+    }
+
+    const protectionEndsAt =
+      new Date(
+        order.protectionEndsAt
+      ).getTime()
+
+    if (
+      !Number.isFinite(protectionEndsAt) ||
+      protectionEndsAt > now
+    ) {
+      continue
+    }
+
+    finalizeOrder(
+      order,
+      'auto_completed_after_48h'
+    )
+
+    completedCount += 1
+  }
+
+  if (completedCount > 0) {
+    console.log(
+      `TEFTE auto-completed ${completedCount} delivered order(s)`
+    )
+  }
+
+  return completedCount
+}
+
+processAutoCompletions()
+
+const autoCompleteTimer = setInterval(
+  () => {
+    try {
+      processAutoCompletions()
+    } catch (error) {
+      console.error(
+        'TEFTE auto-complete error:',
+        error
+      )
+    }
+  },
+  60 * 1000
+)
+
+if (
+  typeof autoCompleteTimer.unref ===
+  'function'
+) {
+  autoCompleteTimer.unref()
+}
 
 app.use(express.json())
 
@@ -840,6 +1034,140 @@ app.patch(
   })
   }
 )
+
+// Spend one Listing Boost on a specific active listing.
+// One boost keeps the listing promoted for 24 hours.
+app.post('/api/products/:id/boost', (req, res) => {
+  try {
+    const product = userProducts.find(
+      (item) => item.id === req.params.id
+    )
+
+    if (!product) {
+      return res.status(404).json({
+        error: 'Listing not found.',
+      })
+    }
+
+    const wallet =
+      typeof req.body?.wallet === 'string'
+        ? req.body.wallet.trim()
+        : ''
+
+    if (!wallet) {
+      return res.status(400).json({
+        error: 'Wallet is required.',
+      })
+    }
+
+    const status =
+      product.status || 'active'
+
+    if (status !== 'active') {
+      return res.status(409).json({
+        error:
+          'Only an active listing can be boosted.',
+      })
+    }
+
+    if (isBoostActive(product)) {
+      return res.status(409).json({
+        error:
+          'This listing already has an active boost.',
+        boostedUntil: product.boostedUntil,
+      })
+    }
+
+    const account =
+      getRewardAccount(wallet)
+
+    if (
+      !account ||
+      (Number(account.listingBoosts) || 0) < 1
+    ) {
+      return res.status(409).json({
+        error:
+          'You do not have an available Listing Boost.',
+      })
+    }
+
+    const previousBoosts =
+      Number(account.listingBoosts) || 0
+
+    const previousProductBoost = {
+      boostedAt: product.boostedAt,
+      boostedUntil: product.boostedUntil,
+      boostedBy: product.boostedBy,
+    }
+
+    const now = new Date()
+    const boostedUntil =
+      new Date(
+        now.getTime() + 24 * 60 * 60 * 1000
+      )
+
+    account.listingBoosts =
+      previousBoosts - 1
+    account.updatedAt =
+      now.toISOString()
+
+    product.boostedAt =
+      now.toISOString()
+    product.boostedUntil =
+      boostedUntil.toISOString()
+    product.boostedBy = wallet
+
+    try {
+      saveRewards()
+      saveUserProducts()
+    } catch (error) {
+      account.listingBoosts =
+        previousBoosts
+
+      product.boostedAt =
+        previousProductBoost.boostedAt
+      product.boostedUntil =
+        previousProductBoost.boostedUntil
+      product.boostedBy =
+        previousProductBoost.boostedBy
+
+      try {
+        saveRewards()
+        saveUserProducts()
+      } catch (rollbackError) {
+        console.error(
+          'TEFTE boost rollback error:',
+          rollbackError
+        )
+      }
+
+      throw error
+    }
+
+    console.log(
+      'TEFTE listing boosted:',
+      product.id,
+      'until',
+      product.boostedUntil
+    )
+
+    res.json({
+      message:
+        'Listing boosted for 24 hours.',
+      product,
+      rewards: account,
+    })
+  } catch (error) {
+    console.error(
+      'Could not boost TEFTE listing:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not boost listing.',
+    })
+  }
+})
 
 // Delete a TEFTE user listing.
 app.delete('/api/products/:id', (req, res) => {
@@ -1338,6 +1666,17 @@ app.post('/api/orders', (req, res) => {
       transactionSignature:
         transactionSignature || null,
       status: 'waiting_seller',
+      carrier: null,
+      carrierStatus: null,
+      trackingNumber: null,
+      trackingVerifiedAt: null,
+      shippedAt: null,
+      deliveredAt: null,
+      protectionEndsAt: null,
+      disputedAt: null,
+      disputeReason: null,
+      completedAt: null,
+      completionReason: null,
       createdAt: now,
       updatedAt: now,
     }
@@ -1430,9 +1769,15 @@ app.patch('/api/orders/:orderId/seller-decision', (req, res) => {
   }
 })
 // Seller can mark an accepted order as shipped.
+// For the MVP the seller must choose a carrier and enter a tracking number.
+// Real carrier API verification is added later.
 app.patch('/api/orders/:orderId/seller-ship', (req, res) => {
   try {
     const { orderId } = req.params
+    const {
+      carrier,
+      trackingNumber,
+    } = req.body || {}
 
     const order = orders.find(
       (item) => item.id === orderId
@@ -1451,15 +1796,49 @@ app.patch('/api/orders/:orderId/seller-ship', (req, res) => {
       })
     }
 
+    if (
+      typeof carrier !== 'string' ||
+      !SUPPORTED_CARRIERS[carrier]
+    ) {
+      return res.status(400).json({
+        error:
+          'Choose a supported delivery carrier.',
+      })
+    }
+
+    const cleanTrackingNumber =
+      typeof trackingNumber === 'string'
+        ? trackingNumber.trim()
+        : ''
+
+    if (
+      cleanTrackingNumber.length < 5 ||
+      cleanTrackingNumber.length > 64
+    ) {
+      return res.status(400).json({
+        error:
+          'Enter a valid tracking number.',
+      })
+    }
+
+    const now = new Date().toISOString()
+
     order.status = 'shipped'
-    order.updatedAt =
-      new Date().toISOString()
+    order.carrier = carrier
+    order.carrierStatus = 'shipped'
+    order.trackingNumber =
+      cleanTrackingNumber
+    order.trackingVerifiedAt = null
+    order.shippedAt = now
+    order.updatedAt = now
 
     saveOrders()
 
     console.log(
       'TEFTE order shipped:',
-      order.id
+      order.id,
+      SUPPORTED_CARRIERS[carrier],
+      cleanTrackingNumber
     )
 
     res.json({
@@ -1476,10 +1855,14 @@ app.patch('/api/orders/:orderId/seller-ship', (req, res) => {
     })
   }
 })
-// Buyer confirms delivery after the seller shipped the order.
-app.patch('/api/orders/:orderId/buyer-received', (req, res) => {
+
+// Delivery confirmation from a carrier/backend integration.
+// IMPORTANT: this endpoint is not exposed in the mobile UI.
+// In production it should be called only by a trusted carrier webhook/backend.
+app.patch('/api/orders/:orderId/delivery-confirmed', (req, res) => {
   try {
     const { orderId } = req.params
+    const { source } = req.body || {}
 
     const order = orders.find(
       (item) => item.id === orderId
@@ -1494,19 +1877,55 @@ app.patch('/api/orders/:orderId/buyer-received', (req, res) => {
     if (order.status !== 'shipped') {
       return res.status(409).json({
         error:
-          'Only a shipped order can be confirmed as received',
+          'Only a shipped order can be marked as delivered',
       })
     }
 
-    order.status = 'received'
+    if (
+      !order.carrier ||
+      !order.trackingNumber
+    ) {
+      return res.status(409).json({
+        error:
+          'Carrier and tracking number are required before delivery confirmation.',
+      })
+    }
+
+    if (
+      source !== 'carrier' &&
+      source !== 'carrier-demo'
+    ) {
+      return res.status(400).json({
+        error:
+          'A trusted carrier source is required',
+      })
+    }
+
+    const deliveredAt = new Date()
+    const protectionEndsAt =
+      new Date(
+        deliveredAt.getTime() +
+          DELIVERY_PROTECTION_MS
+      )
+
+    order.status = 'delivered'
+    order.carrierStatus = 'delivered'
+    order.trackingVerifiedAt =
+      deliveredAt.toISOString()
+    order.deliveredAt =
+      deliveredAt.toISOString()
+    order.protectionEndsAt =
+      protectionEndsAt.toISOString()
     order.updatedAt =
-      new Date().toISOString()
+      order.deliveredAt
 
     saveOrders()
 
     console.log(
-      'TEFTE order received:',
-      order.id
+      'TEFTE delivery confirmed:',
+      order.id,
+      'protection until',
+      order.protectionEndsAt
     )
 
     res.json({
@@ -1523,10 +1942,13 @@ app.patch('/api/orders/:orderId/buyer-received', (req, res) => {
     })
   }
 })
-// Complete the TEFTE workflow after delivery is confirmed.
-// SKR rewards are granted here, only after the order reaches Completed.
-app.patch('/api/orders/:orderId/complete', (req, res) => {
+
+// Buyer can confirm a carrier-delivered order immediately.
+// This completes the order before the 48-hour timer expires.
+app.patch('/api/orders/:orderId/buyer-confirm', (req, res) => {
   try {
+    processAutoCompletions()
+
     const { orderId } = req.params
 
     const order = orders.find(
@@ -1539,50 +1961,170 @@ app.patch('/api/orders/:orderId/complete', (req, res) => {
       })
     }
 
-    if (order.status !== 'received') {
+    if (order.status === 'completed') {
+      const result =
+        finalizeOrder(order)
+
+      return res.json(result)
+    }
+
+    if (order.status !== 'delivered') {
       return res.status(409).json({
         error:
-          'Only a received order can be completed',
+          'Only a delivered order can be confirmed by the buyer',
       })
     }
 
-    order.status = 'completed'
-    order.updatedAt =
-      new Date().toISOString()
+    const result =
+      finalizeOrder(
+        order,
+        'buyer_confirmed'
+      )
 
-    // Persist the order state first.
-    // If reward persistence ever fails, the rewards endpoint can
-    // safely backfill this completed order because order IDs are
-    // stored in rewardedOrderIds.
+    res.json(result)
+  } catch (error) {
+    console.error(
+      'Could not confirm TEFTE order:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not confirm order',
+    })
+  }
+})
+
+// Buyer can open a dispute during the 48-hour protection window.
+// A disputed order never auto-completes until a future dispute-resolution flow decides it.
+app.patch('/api/orders/:orderId/buyer-dispute', (req, res) => {
+  try {
+    processAutoCompletions()
+
+    const { orderId } = req.params
+    const { reason } = req.body || {}
+
+    const order = orders.find(
+      (item) => item.id === orderId
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        error: 'Order not found',
+      })
+    }
+
+    if (order.status !== 'delivered') {
+      return res.status(409).json({
+        error:
+          'A dispute can only be opened for a delivered order during the protection window',
+      })
+    }
+
+    const protectionEndsAt =
+      new Date(
+        order.protectionEndsAt || 0
+      ).getTime()
+
+    if (
+      !Number.isFinite(protectionEndsAt) ||
+      protectionEndsAt <= Date.now()
+    ) {
+      processAutoCompletions()
+
+      return res.status(409).json({
+        error:
+          'The 48-hour protection window has ended',
+      })
+    }
+
+    const now = new Date().toISOString()
+
+    order.status = 'disputed'
+    order.disputedAt = now
+    order.disputeReason =
+      typeof reason === 'string' &&
+      reason.trim()
+        ? reason.trim()
+        : 'Buyer opened a dispute'
+    order.updatedAt = now
+
     saveOrders()
 
-    const rewardResult =
-      applySkrReward(order)
-
     console.log(
-      'TEFTE order completed:',
+      'TEFTE dispute opened:',
       order.id
     )
 
-    if (
-      rewardResult &&
-      !rewardResult.alreadyRewarded
-    ) {
-      console.log(
-        'TEFTE SKR reward:',
-        order.buyer,
-        `+${rewardResult.reward.xpAwarded} XP`,
-        `+${rewardResult.reward.listingBoostsAwarded} boost`
+    res.json({
+      order,
+    })
+  } catch (error) {
+    console.error(
+      'Could not open TEFTE dispute:',
+      error
+    )
+
+    res.status(500).json({
+      error: 'Could not open dispute',
+    })
+  }
+})
+
+// Legacy endpoint kept temporarily for older clients.
+// New clients use /buyer-confirm after carrier delivery confirmation.
+app.patch('/api/orders/:orderId/complete', (req, res) => {
+  try {
+    processAutoCompletions()
+
+    const { orderId } = req.params
+
+    const order = orders.find(
+      (item) => item.id === orderId
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        error: 'Order not found',
+      })
+    }
+
+    if (order.status === 'completed') {
+      return res.json(
+        finalizeOrder(order)
       )
     }
 
-    res.json({
-      order,
-      reward:
-        rewardResult?.reward || null,
-      rewards:
-        rewardResult?.account || null,
-    })
+    if (
+      order.status !== 'delivered' &&
+      order.status !== 'received'
+    ) {
+      return res.status(409).json({
+        error:
+          'Only a delivered order can be completed',
+      })
+    }
+
+    if (order.status === 'received') {
+      order.status = 'delivered'
+      order.deliveredAt =
+        order.updatedAt ||
+        new Date().toISOString()
+      order.protectionEndsAt =
+        new Date(
+          new Date(
+            order.deliveredAt
+          ).getTime() +
+            DELIVERY_PROTECTION_MS
+        ).toISOString()
+    }
+
+    const result =
+      finalizeOrder(
+        order,
+        'legacy_manual_complete'
+      )
+
+    res.json(result)
   } catch (error) {
     console.error(
       'Could not complete TEFTE order:',
@@ -1594,6 +2136,7 @@ app.patch('/api/orders/:orderId/complete', (req, res) => {
     })
   }
 })
+
 // Buyer can cancel only before seller confirmation.
 app.patch('/api/orders/:orderId/buyer-cancel', (req, res) => {
   try {
@@ -1689,6 +2232,8 @@ app.get('/api/rewards/:wallet', (req, res) => {
 // Get all marketplace orders.
 app.get('/api/orders', (req, res) => {
   try {
+    processAutoCompletions()
+
     res.json({
       orders,
     })
@@ -1706,6 +2251,8 @@ app.get('/api/orders', (req, res) => {
 // Get one marketplace order.
 app.get('/api/orders/:orderId', (req, res) => {
   try {
+    processAutoCompletions()
+
     const { orderId } = req.params
 
     const order = orders.find(
@@ -1720,6 +2267,8 @@ app.get('/api/orders/:orderId', (req, res) => {
 
     res.json({
       order,
+      reward:
+        getRewardForOrder(order),
     })
   } catch (error) {
     console.error(
