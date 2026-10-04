@@ -7,7 +7,7 @@ const path = require('path')
 const products = require('./products.json')
 
 const app = express()
-const PORT = 3000
+const PORT = Number(process.env.PORT || 3000)
 
 const SUPPORTED_CARRIERS = {
   nova_poshta: 'Nova Poshta',
