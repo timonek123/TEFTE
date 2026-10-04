@@ -8,6 +8,11 @@ const products = require('./products.json')
 
 const app = express()
 const PORT = Number(process.env.PORT || 3000)
+const DATA_DIR = process.env.DATA_DIR || __dirname
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true })
+}
 
 const SUPPORTED_CARRIERS = {
   nova_poshta: 'Nova Poshta',
@@ -16,23 +21,14 @@ const SUPPORTED_CARRIERS = {
 }
 const DELIVERY_PROTECTION_MS = 48 * 60 * 60 * 1000
 
-const USER_PRODUCTS_FILE = path.join(__dirname, 'user-products.json')
-const CHAT_MESSAGES_FILE = path.join(
-  __dirname,
-  'chat-messages.json'
-)
+const USER_PRODUCTS_FILE = path.join(DATA_DIR, 'user-products.json')
+const CHAT_MESSAGES_FILE = path.join(DATA_DIR, 'chat-messages.json')
 
-const ORDERS_FILE = path.join(
-  __dirname,
-  'orders.json'
-)
+const ORDERS_FILE = path.join(DATA_DIR, 'orders.json')
 
-const REWARDS_FILE = path.join(
-  __dirname,
-  'rewards.json'
-)
+const REWARDS_FILE = path.join(DATA_DIR, 'rewards.json')
 
-const UPLOADS_DIR = path.join(__dirname, 'uploads')
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads')
 
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true })
