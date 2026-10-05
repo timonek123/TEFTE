@@ -38,6 +38,7 @@ type Product = {
   category?: string
   condition?: string
   seller?: string
+  sellerWallet?: string
   userListing?: boolean
   status?: ListingStatus
   imageUrl?: string | null
@@ -198,6 +199,7 @@ export default function ProfileScreen() {
   const handledEditRequest = useRef<string | null>(null)
   const { account, connect } = useMobileWallet()
   const walletAddress = account?.address?.toString()
+  const sellerLabel = account?.label || ''
 
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<Order[]>([])
@@ -330,10 +332,21 @@ export default function ProfileScreen() {
           ? data.products
           : []
 
-      const myProducts = allProducts.filter(
-        (product) =>
-          product.userListing === true || product.id?.startsWith('user-'),
-      )
+      const myProducts = allProducts.filter((product) => {
+        if (!walletAddress) {
+          return false
+        }
+
+        if (product.sellerWallet) {
+          return product.sellerWallet === walletAddress
+        }
+
+        return (
+          product.userListing === true &&
+          Boolean(sellerLabel) &&
+          product.seller === sellerLabel
+        )
+      })
 
       setProducts(myProducts)
     } catch (err) {
@@ -343,7 +356,7 @@ export default function ProfileScreen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [walletAddress, sellerLabel])
 
   useFocusEffect(
     useCallback(() => {
