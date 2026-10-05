@@ -222,7 +222,7 @@ export default function HomeScreen() {
             <Image
               source={require('../../assets/images/tefte-mascot.png')}
               style={styles.heroMascot}
-              resizeMode="cover"
+              resizeMode="contain"
             />
           </View>
 
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
   heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 4,
   },
 
   heroCopy: {
@@ -551,9 +551,11 @@ const styles = StyleSheet.create({
   },
 
   heroMascot: {
-    width: 88,
-    height: 88,
-    borderRadius: 22,
+    width: 112,
+    height: 112,
+    marginTop: -12,
+    marginRight: -8,
+    marginBottom: -6,
   },
 
   title: {
