@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -38,7 +39,7 @@ const quickCategories = [
 ]
 
 export default function HomeScreen() {
-  const { account, connect } = useMobileWallet()
+  const { account, connect, disconnect } = useMobileWallet()
   const router = useRouter()
 
   const [query, setQuery] = useState('')
@@ -159,6 +160,63 @@ export default function HomeScreen() {
     })
   }
 
+  function handleWalletPress() {
+    if (!account) {
+      connect().catch((error) => {
+        console.log('Wallet connect cancelled or failed:', error)
+      })
+      return
+    }
+
+    const address = account.address.toString()
+    const shortAddress =
+      address.length > 14
+        ? `${address.slice(0, 6)}...${address.slice(-6)}`
+        : address
+
+    Alert.alert(
+      'Wallet connected',
+      `${account.label || 'Seeker wallet'}\n${shortAddress}`,
+      [
+        {
+          text: 'Disconnect wallet',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Disconnect wallet?',
+              'Disconnect this wallet from TEFTE?',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                },
+                {
+                  text: 'Disconnect',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await disconnect()
+                    } catch (error) {
+                      console.error('Wallet disconnect error:', error)
+                      Alert.alert(
+                        'Could not disconnect',
+                        'Please try again.'
+                      )
+                    }
+                  },
+                },
+              ]
+            )
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    )
+  }
+
   function ProductImage({
     product,
     style,
@@ -199,12 +257,21 @@ export default function HomeScreen() {
           <Text style={styles.logo}>TEFTE</Text>
 
           {account ? (
-            <View style={styles.connectedWallet}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.connectedWallet,
+                pressed && styles.walletPressed,
+              ]}
+              onPress={handleWalletPress}
+            >
               <View style={styles.statusDot} />
               <Text style={styles.walletText}>{account.label}</Text>
-            </View>
+            </Pressable>
           ) : (
-            <Pressable style={styles.walletButton} onPress={connect}>
+            <Pressable
+              style={styles.walletButton}
+              onPress={handleWalletPress}
+            >
               <Text style={styles.walletButtonText}>Connect wallet</Text>
             </Pressable>
           )}
@@ -508,6 +575,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#111111',
+  },
+
+  walletPressed: {
+    opacity: 0.7,
   },
 
   walletButton: {
