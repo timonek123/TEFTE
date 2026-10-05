@@ -256,6 +256,138 @@ export default function ProfileScreen() {
     }
   }, [walletAddress])
 
+  const uploadAvatar = useCallback(
+    async (uri: string) => {
+      if (!walletAddress || uploadingAvatar) {
+        return
+      }
+
+      try {
+        setUploadingAvatar(true)
+
+        const formData = new FormData()
+        formData.append(
+          'avatar',
+          {
+            uri,
+            name: 'tefte-avatar.jpg',
+            type: 'image/jpeg',
+          } as any
+        )
+
+        const response = await fetch(
+          `${API_URL}/api/profiles/${encodeURIComponent(walletAddress)}/avatar`,
+          {
+            method: 'POST',
+            body: formData,
+          }
+        )
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data?.error || 'Could not upload avatar.')
+        }
+
+        const rawAvatar = data?.profile?.avatarUrl
+
+        setAvatarUrl(
+          typeof rawAvatar === 'string' && rawAvatar
+            ? rawAvatar.startsWith('http://') || rawAvatar.startsWith('https://')
+              ? rawAvatar
+              : `${API_URL}${rawAvatar}`
+            : null
+        )
+
+        Alert.alert(
+          'Profile updated',
+          'Your TEFTE avatar has been saved.'
+        )
+      } catch (err) {
+        console.error('Avatar upload error:', err)
+
+        Alert.alert(
+          'Avatar upload failed',
+          err instanceof Error
+            ? err.message
+            : 'Could not upload avatar.'
+        )
+      } finally {
+        setUploadingAvatar(false)
+      }
+    },
+    [walletAddress, uploadingAvatar],
+  )
+
+  const chooseAvatarFromGallery = useCallback(async () => {
+    const permission =
+      await ImagePicker.requestMediaLibraryPermissionsAsync()
+
+    if (!permission.granted) {
+      Alert.alert(
+        'Photo permission needed',
+        'TEFTE needs access to your photos so you can choose a profile picture.'
+      )
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    })
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      await uploadAvatar(result.assets[0].uri)
+    }
+  }, [uploadAvatar])
+
+  const takeAvatarPhoto = useCallback(async () => {
+    const permission =
+      await ImagePicker.requestCameraPermissionsAsync()
+
+    if (!permission.granted) {
+      Alert.alert(
+        'Camera permission needed',
+        'TEFTE needs access to your camera so you can take a profile picture.'
+      )
+      return
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    })
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      await uploadAvatar(result.assets[0].uri)
+    }
+  }, [uploadAvatar])
+
+  const changeAvatar = useCallback(() => {
+    if (!walletAddress || uploadingAvatar) {
+      return
+    }
+
+    Alert.alert(
+      'Profile photo',
+      'Choose how you want to add your avatar.',
+      [
+        { text: 'Take photo', onPress: takeAvatarPhoto },
+        { text: 'Choose from gallery', onPress: chooseAvatarFromGallery },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    )
+  }, [
+    walletAddress,
+    uploadingAvatar,
+    takeAvatarPhoto,
+    chooseAvatarFromGallery,
+  ])
+
   const loadRewards = useCallback(async () => {
     if (!walletAddress) {
       setServerRewards(null)
