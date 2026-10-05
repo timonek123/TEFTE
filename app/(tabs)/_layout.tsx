@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router'
-import { Text } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 
 export default function TabsLayout() {
   return (
@@ -7,17 +7,20 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#5B331E',
-        tabBarInactiveTintColor: '#8A8A8A',
+        tabBarInactiveTintColor: '#9A8F87',
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          height: 72,
-          paddingTop: 8,
+          height: 74,
+          paddingTop: 7,
           paddingBottom: 10,
           backgroundColor: '#FFFCF7',
-          borderTopColor: '#E8E8E5',
+          borderTopWidth: 1,
+          borderTopColor: '#EEDFD2',
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '600',
+          fontWeight: '700',
+          marginTop: 1,
         },
       }}
     >
@@ -25,8 +28,12 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 21, color }}>⌂</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'home' : 'home-outline'}
+              size={23}
+              color={color}
+            />
           ),
         }}
       />
@@ -35,8 +42,12 @@ export default function TabsLayout() {
         name="search"
         options={{
           title: 'Search',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 19, color }}>⌕</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'search' : 'search-outline'}
+              size={23}
+              color={color}
+            />
           ),
         }}
       />
@@ -45,8 +56,12 @@ export default function TabsLayout() {
         name="sell"
         options={{
           title: 'Sell',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 22, color }}>＋</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'add-circle' : 'add-circle-outline'}
+              size={29}
+              color={color}
+            />
           ),
         }}
       />
@@ -55,8 +70,16 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 19, color }}>◌</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={
+                focused
+                  ? 'chatbubble-ellipses'
+                  : 'chatbubble-ellipses-outline'
+              }
+              size={23}
+              color={color}
+            />
           ),
         }}
       />
@@ -65,8 +88,12 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 19, color }}>○</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'person' : 'person-outline'}
+              size={23}
+              color={color}
+            />
           ),
         }}
       />
