@@ -1,5 +1,5 @@
 import { API_URL } from '../../lib/api'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { useMobileWallet } from '@wallet-ui/react-native-kit'
 import * as ImagePicker from 'expo-image-picker'
 
@@ -127,7 +127,13 @@ function getBoostTimeLabel(product: Product) {
     Date.now()
 
   const remainingHours =
-    Math.max(1, Math.ceil(remainingMs / (60 * 60 * 1000)))
+    Math.min(
+      24,
+      Math.max(
+        1,
+        Math.ceil(remainingMs / (60 * 60 * 1000)),
+      ),
+    )
 
   return `${remainingHours}h left`
 }
@@ -184,6 +190,12 @@ function getXpLevel(xp: number) {
 
 export default function ProfileScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams<{
+    section?: string
+    editProductId?: string
+    editRequest?: string
+  }>()
+  const handledEditRequest = useRef<string | null>(null)
   const { account, connect } = useMobileWallet()
   const walletAddress = account?.address?.toString()
 
@@ -370,6 +382,47 @@ export default function ProfileScreen() {
       })),
     )
   }
+
+  useEffect(() => {
+    if (params.section === 'listings') {
+      setOpenSection('listings')
+    }
+
+    const editProductId =
+      typeof params.editProductId === 'string'
+        ? params.editProductId
+        : ''
+
+    const editRequest =
+      typeof params.editRequest === 'string'
+        ? params.editRequest
+        : ''
+
+    if (
+      !editProductId ||
+      !editRequest ||
+      handledEditRequest.current === editRequest
+    ) {
+      return
+    }
+
+    const product = products.find(
+      (item) => item.id === editProductId,
+    )
+
+    if (!product) {
+      return
+    }
+
+    handledEditRequest.current = editRequest
+    setOpenSection('listings')
+    openEdit(product)
+  }, [
+    params.section,
+    params.editProductId,
+    params.editRequest,
+    products,
+  ])
 
   const closeEdit = () => {
     if (savingEdit) {
