@@ -195,6 +195,65 @@ const chatMessages = loadChatMessages()
 const orders = loadOrders()
 const rewards = loadRewards()
 
+// One-time recovery for the Plush TEFTE Cushion listing that was
+// accidentally deleted from the production data file. The DELETE route
+// does not remove upload files, so the original photo can be reused.
+// This runs only on hosted DATA_DIR storage and is protected by a marker.
+const PLUSH_RESTORE_MARKER = path.join(
+  DATA_DIR,
+  '.tefte-restore-plush-cushion-v1'
+)
+
+if (
+  process.env.DATA_DIR &&
+  !fs.existsSync(PLUSH_RESTORE_MARKER)
+) {
+  const plushListingId = 'user-1791185932700'
+  const plushExists = userProducts.some(
+    (product) => product.id === plushListingId
+  )
+
+  if (!plushExists) {
+    const boostedAt = new Date()
+    const boostedUntil = new Date(
+      boostedAt.getTime() + 24 * 60 * 60 * 1000
+    )
+
+    userProducts.unshift({
+      id: plushListingId,
+      title: 'Plush TEFTE Cushion',
+      category: 'Home',
+      price: 20,
+      currency: 'USDC',
+      description:
+        'Soft round plush cushion shaped like a cute hamster, with brown velour on top and a cream face featuring an embroidered smile and little feet. Looks clean with no visible tears or stains. A cozy decorative pillow for a bed or couch.',
+      condition: 'Good',
+      seller: 'crypton.skr',
+      userListing: true,
+      status: 'active',
+      imageUrls: [
+        '/uploads/listing-1791185932441-825141270.jpg',
+      ],
+      imageUrl:
+        '/uploads/listing-1791185932441-825141270.jpg',
+      boostedAt: boostedAt.toISOString(),
+      boostedUntil: boostedUntil.toISOString(),
+    })
+
+    saveUserProducts()
+
+    console.log(
+      'Recovered accidentally deleted Plush TEFTE Cushion listing.'
+    )
+  }
+
+  fs.writeFileSync(
+    PLUSH_RESTORE_MARKER,
+    new Date().toISOString(),
+    'utf8'
+  )
+}
+
 function isBoostActive(product) {
   if (!product?.boostedUntil) {
     return false
