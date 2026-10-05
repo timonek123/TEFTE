@@ -77,6 +77,7 @@ type Product = {
   weightKg?: number
   condition: string
   seller?: string
+  sellerWallet?: string
   userListing?: boolean
   status?: 'active' | 'sold'
   boostedUntil?: string | null
@@ -106,7 +107,14 @@ export default function ProductScreen() {
   const [listingBoosts, setListingBoosts] = useState(0)
 
   const walletAddress = account?.address?.toString()
-  const isOwnListing = product?.userListing === true
+  const sellerLabel = account?.label || ''
+  const isOwnListing = Boolean(
+    product?.userListing === true &&
+      walletAddress &&
+      (product.sellerWallet
+        ? product.sellerWallet === walletAddress
+        : Boolean(sellerLabel) && product.seller === sellerLabel)
+  )
 
   useEffect(() => {
     async function loadProduct() {
