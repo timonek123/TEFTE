@@ -212,10 +212,22 @@ export default function HomeScreen() {
 
         {/* HERO */}
         <View style={styles.hero}>
-          <Text style={styles.title}>What are you looking for?</Text>
+          <View style={styles.heroTop}>
+            <View style={styles.heroCopy}>
+              <Text style={styles.heroEyebrow}>MEET TEFTE</Text>
+
+              <Text style={styles.title}>What are you looking for?</Text>
+            </View>
+
+            <Image
+              source={require('../../assets/images/tefte-mascot.png')}
+              style={styles.heroMascot}
+              resizeMode="cover"
+            />
+          </View>
 
           <Text style={styles.subtitle}>
-            Tell TEFTE what you want. AI will find the best matches.
+            Your marketplace helper. Tell TEFTE what you want and AI will find the best matches.
           </Text>
 
           <TextInput
@@ -468,8 +480,9 @@ const styles = StyleSheet.create({
 
   logo: {
     fontSize: 28,
-    fontWeight: '800',
-    color: '#111111',
+    fontWeight: '900',
+    color: '#5B331E',
+    letterSpacing: -0.8,
   },
 
   connectedWallet: {
@@ -511,22 +524,51 @@ const styles = StyleSheet.create({
   },
 
   hero: {
-    marginTop: 42,
+    marginTop: 28,
+    backgroundColor: '#FFF3DD',
+    borderWidth: 1,
+    borderColor: '#F1D7AE',
+    borderRadius: 26,
+    padding: 18,
+  },
+
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  heroCopy: {
+    flex: 1,
+  },
+
+  heroEyebrow: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+    color: '#A56A3A',
+    marginBottom: 6,
+  },
+
+  heroMascot: {
+    width: 88,
+    height: 88,
+    borderRadius: 22,
   },
 
   title: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: '#111111',
-    lineHeight: 41,
+    fontSize: 29,
+    fontWeight: '900',
+    color: '#4B2C1D',
+    lineHeight: 35,
   },
 
   subtitle: {
-    fontSize: 15,
-    color: '#666666',
-    lineHeight: 23,
-    marginTop: 10,
-    marginBottom: 20,
+    fontSize: 14,
+    color: '#6E5748',
+    lineHeight: 21,
+    marginTop: 12,
+    marginBottom: 16,
   },
 
   searchInput: {
@@ -543,7 +585,7 @@ const styles = StyleSheet.create({
   },
 
   searchButton: {
-    backgroundColor: '#111111',
+    backgroundColor: '#5B331E',
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
