@@ -2236,6 +2236,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 21,
+  },
+
   profileCard: {
     padding: 18,
     borderRadius: 24,
@@ -2262,6 +2268,33 @@ const styles = StyleSheet.create({
     fontSize: 27,
     fontWeight: '900',
     color: '#111111',
+  },
+
+  bigAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 33,
+  },
+
+  avatarEditBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#5B331E',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  avatarEditBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    lineHeight: 18,
+    fontWeight: '800',
   },
 
   profileInfo: {
