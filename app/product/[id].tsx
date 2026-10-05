@@ -22,6 +22,7 @@ import {
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
+  Alert,
   StyleSheet,
   Text,
   View,
@@ -36,6 +37,36 @@ const PAGE_HORIZONTAL_PADDING = 24
 const GALLERY_WIDTH =
   SCREEN_WIDTH - PAGE_HORIZONTAL_PADDING * 2
 
+function isBoostActive(product: Product) {
+  if (!product.boostedUntil) {
+    return false
+  }
+
+  const boostedUntil = new Date(product.boostedUntil).getTime()
+
+  return (
+    Number.isFinite(boostedUntil) &&
+    boostedUntil > Date.now() &&
+    (product.status || 'active') === 'active'
+  )
+}
+
+function getBoostTimeLabel(product: Product) {
+  if (!isBoostActive(product) || !product.boostedUntil) {
+    return ''
+  }
+
+  const remainingMs =
+    new Date(product.boostedUntil).getTime() - Date.now()
+
+  const remainingHours = Math.min(
+    24,
+    Math.max(1, Math.ceil(remainingMs / (60 * 60 * 1000))),
+  )
+
+  return `${remainingHours}h left`
+}
+
 type Product = {
   id: string
   title: string
@@ -45,6 +76,10 @@ type Product = {
   description: string
   weightKg?: number
   condition: string
+  seller?: string
+  userListing?: boolean
+  status?: 'active' | 'sold'
+  boostedUntil?: string | null
   imageUrl?: string | null
   imageUrls?: string[]
 }
@@ -67,6 +102,11 @@ export default function ProductScreen() {
   const [error, setError] = useState('')
   const [activeImageIndex, setActiveImageIndex] =
     useState(0)
+  const [actionBusy, setActionBusy] = useState(false)
+  const [listingBoosts, setListingBoosts] = useState(0)
+
+  const walletAddress = account?.address?.toString()
+  const isOwnListing = product?.userListing === true
 
   useEffect(() => {
     async function loadProduct() {
@@ -107,6 +147,43 @@ export default function ProductScreen() {
 
     loadProduct()
   }, [id])
+
+  useEffect(() => {
+    if (!isOwnListing || !walletAddress) {
+      setListingBoosts(0)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadRewards() {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/rewards/${encodeURIComponent(walletAddress)}`
+        )
+
+        if (!response.ok) {
+          return
+        }
+
+        const data = await response.json()
+
+        if (!cancelled) {
+          setListingBoosts(
+            Math.max(0, Number(data?.rewards?.listingBoosts) || 0)
+          )
+        }
+      } catch (error) {
+        console.error('TEFTE owner rewards error:', error)
+      }
+    }
+
+    loadRewards()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOwnListing, walletAddress])
 
   const productImages = useMemo(() => {
     if (!product) {
@@ -157,6 +234,222 @@ export default function ProductScreen() {
       params: { id: chatId },
     })
   }
+  function handleOwnerEdit() {
+    if (!product) {
+      return
+    }
+
+    router.push({
+      pathname: '/(tabs)/profile',
+      params: {
+        section: 'listings',
+        editProductId: product.id,
+        editRequest: `${product.id}-${Date.now()}`,
+      },
+    })
+  }
+
+  async function changeOwnerStatus() {
+    if (!product || actionBusy) {
+      return
+    }
+
+    const nextStatus =
+      (product.status || 'active') === 'sold'
+        ? 'active'
+        : 'sold'
+
+    try {
+      setActionBusy(true)
+
+      const response = await fetch(
+        `${API_URL}/api/products/${encodeURIComponent(product.id)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: nextStatus,
+          }),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Could not update listing.')
+      }
+
+      setProduct(data.product)
+    } catch (error) {
+      Alert.alert(
+        'Could not update listing',
+        error instanceof Error ? error.message : 'Please try again.'
+      )
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  function askOwnerStatusChange() {
+    if (!product) {
+      return
+    }
+
+    const sold = (product.status || 'active') === 'sold'
+
+    Alert.alert(
+      sold ? 'Make active again?' : 'Mark as sold?',
+      sold
+        ? `${product.title} will return to Active status.`
+        : `${product.title} will remain in your profile with Sold status.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: sold ? 'Make active' : 'Mark as sold',
+          onPress: changeOwnerStatus,
+        },
+      ]
+    )
+  }
+
+  function askOwnerDelete() {
+    if (!product || actionBusy) {
+      return
+    }
+
+    Alert.alert(
+      'Delete listing?',
+      `${product.title} will be permanently removed from TEFTE.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionBusy(true)
+
+              const response = await fetch(
+                `${API_URL}/api/products/${encodeURIComponent(product.id)}`,
+                { method: 'DELETE' }
+              )
+
+              const data = await response.json()
+
+              if (!response.ok) {
+                throw new Error(data?.error || 'Could not delete listing.')
+              }
+
+              router.replace('/(tabs)/profile')
+            } catch (error) {
+              Alert.alert(
+                'Could not delete listing',
+                error instanceof Error ? error.message : 'Please try again.'
+              )
+            } finally {
+              setActionBusy(false)
+            }
+          },
+        },
+      ]
+    )
+  }
+
+  function askOwnerBoost() {
+    if (!product || actionBusy) {
+      return
+    }
+
+    if (!walletAddress) {
+      Alert.alert(
+        'Connect wallet',
+        'Connect your wallet before using a Listing Boost.'
+      )
+      return
+    }
+
+    if ((product.status || 'active') !== 'active') {
+      Alert.alert(
+        'Listing is not active',
+        'Only active listings can be boosted.'
+      )
+      return
+    }
+
+    if (isBoostActive(product)) {
+      Alert.alert(
+        'Already boosted',
+        `This listing already has an active boost (${getBoostTimeLabel(product)}).`
+      )
+      return
+    }
+
+    if (listingBoosts < 1) {
+      Alert.alert(
+        'No Listing Boosts',
+        'Complete an eligible SKR purchase to earn a Listing Boost.'
+      )
+      return
+    }
+
+    Alert.alert(
+      'Use 1 Listing Boost?',
+      `Boost "${product.title}" for 24 hours?\n\nAvailable boosts: ${listingBoosts}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Use Boost',
+          onPress: async () => {
+            try {
+              setActionBusy(true)
+
+              const response = await fetch(
+                `${API_URL}/api/products/${encodeURIComponent(product.id)}/boost`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    wallet: walletAddress,
+                  }),
+                }
+              )
+
+              const data = await response.json()
+
+              if (!response.ok) {
+                throw new Error(data?.error || 'Could not boost listing.')
+              }
+
+              if (data?.product) {
+                setProduct(data.product)
+              }
+
+              setListingBoosts(
+                Math.max(0, Number(data?.rewards?.listingBoosts) || 0)
+              )
+
+              Alert.alert(
+                'Listing boosted',
+                'This listing is promoted for the next 24 hours.'
+              )
+            } catch (error) {
+              Alert.alert(
+                'Could not boost listing',
+                error instanceof Error ? error.message : 'Please try again.'
+              )
+            } finally {
+              setActionBusy(false)
+            }
+          },
+        },
+      ]
+    )
+  }
+
   async function handleBuy() {
     if (!account) {
       console.error(
@@ -392,50 +685,144 @@ export default function ProductScreen() {
           </Text>
         </View>
 
-        <View style={styles.paymentCard}>
-          <Text
-            style={styles.paymentLabel}
-          >
-            PRICE
-          </Text>
-
-          <Text
-            style={styles.paymentPrice}
-          >
-            {product.price}{' '}
-            {product.currency}
-          </Text>
-
-          <Text
-            style={styles.paymentHint}
-          >
-            Devnet test payment through
-            your Solana wallet.
-          </Text>
-
-          <Pressable
-            style={styles.messageSellerButton}
-            onPress={handleMessageSeller}
-          >
-            <Text style={styles.messageSellerButtonText}>
-              Message seller
+        {isOwnListing ? (
+          <View style={styles.ownerCard}>
+            <Text style={styles.ownerEyebrow}>
+              YOUR LISTING
             </Text>
-          </Pressable>
 
-          <Pressable
-            style={styles.buyButton}
-            onPress={() =>
-              router.push({
-                pathname: '/checkout/[id]',
-                params: { id: product.id },
-              })
-            }
-          >
-            <Text style={styles.buyButtonText}>
-              Buy with Solana
+            <Text style={styles.paymentPrice}>
+              {product.price}{' '}
+              {product.currency}
             </Text>
-          </Pressable>
-        </View>
+
+            <View style={styles.ownerStatusRow}>
+              <View style={styles.ownerStatusBadge}>
+                <Text style={styles.ownerStatusText}>
+                  {(product.status || 'active') === 'sold'
+                    ? 'SOLD'
+                    : 'ACTIVE'}
+                </Text>
+              </View>
+
+              {isBoostActive(product) ? (
+                <View style={styles.ownerBoostBadge}>
+                  <Text style={styles.ownerBoostBadgeText}>
+                    BOOSTED · {getBoostTimeLabel(product)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <Text style={styles.paymentHint}>
+              This is your listing. Manage it here or from Profile → My listings.
+            </Text>
+
+            <Pressable
+              style={styles.ownerPrimaryButton}
+              onPress={handleOwnerEdit}
+              disabled={actionBusy}
+            >
+              <Text style={styles.ownerPrimaryButtonText}>
+                Edit
+              </Text>
+            </Pressable>
+
+            <View style={styles.ownerButtonRow}>
+              <Pressable
+                style={styles.ownerSecondaryButton}
+                onPress={askOwnerStatusChange}
+                disabled={actionBusy}
+              >
+                <Text style={styles.ownerSecondaryButtonText}>
+                  {(product.status || 'active') === 'sold'
+                    ? 'Make active'
+                    : 'Mark as sold'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.ownerDeleteButton}
+                onPress={askOwnerDelete}
+                disabled={actionBusy}
+              >
+                <Text style={styles.ownerDeleteButtonText}>
+                  Delete
+                </Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={[
+                styles.ownerBoostButton,
+                (actionBusy ||
+                  (product.status || 'active') === 'sold' ||
+                  isBoostActive(product) ||
+                  listingBoosts < 1 ||
+                  !walletAddress) &&
+                  styles.ownerDisabledButton,
+              ]}
+              onPress={askOwnerBoost}
+              disabled={
+                actionBusy ||
+                (product.status || 'active') === 'sold' ||
+                isBoostActive(product) ||
+                listingBoosts < 1 ||
+                !walletAddress
+              }
+            >
+              <Text style={styles.ownerBoostButtonText}>
+                {actionBusy
+                  ? 'Working...'
+                  : isBoostActive(product)
+                    ? `Boosted · ${getBoostTimeLabel(product)}`
+                    : (product.status || 'active') === 'sold'
+                      ? 'Boost unavailable'
+                      : listingBoosts < 1
+                        ? 'No Boosts available'
+                        : 'Use 1 Boost · 24h'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.paymentCard}>
+            <Text style={styles.paymentLabel}>
+              PRICE
+            </Text>
+
+            <Text style={styles.paymentPrice}>
+              {product.price}{' '}
+              {product.currency}
+            </Text>
+
+            <Text style={styles.paymentHint}>
+              Devnet test payment through your Solana wallet.
+            </Text>
+
+            <Pressable
+              style={styles.messageSellerButton}
+              onPress={handleMessageSeller}
+            >
+              <Text style={styles.messageSellerButtonText}>
+                Message seller
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.buyButton}
+              onPress={() =>
+                router.push({
+                  pathname: '/checkout/[id]',
+                  params: { id: product.id },
+                })
+              }
+            >
+              <Text style={styles.buyButtonText}>
+                Buy with Solana
+              </Text>
+            </Pressable>
+          </View>
+        )}
         <Text style={styles.caption}>
           AI-powered marketplace on
           Solana
@@ -672,6 +1059,125 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+  },
+
+  ownerCard: {
+    marginTop: 38,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E3E3E0',
+    borderRadius: 22,
+    padding: 20,
+  },
+
+  ownerEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#666666',
+    letterSpacing: 0.8,
+  },
+
+  ownerStatusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+
+  ownerStatusBadge: {
+    backgroundColor: '#F1F1EE',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+
+  ownerStatusText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#333333',
+  },
+
+  ownerBoostBadge: {
+    backgroundColor: '#111111',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+
+  ownerBoostBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  ownerPrimaryButton: {
+    marginTop: 20,
+    backgroundColor: '#111111',
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+
+  ownerPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+
+  ownerButtonRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+
+  ownerSecondaryButton: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#111111',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  ownerSecondaryButtonText: {
+    color: '#111111',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  ownerDeleteButton: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#C92A2A',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  ownerDeleteButtonText: {
+    color: '#C92A2A',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  ownerBoostButton: {
+    marginTop: 10,
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: '#EFEFEB',
+  },
+
+  ownerBoostButtonText: {
+    color: '#111111',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  ownerDisabledButton: {
+    opacity: 0.5,
   },
 
   caption: {
