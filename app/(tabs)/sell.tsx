@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
+import { useMobileWallet } from '@wallet-ui/react-native-kit'
 
 const MAX_PHOTOS = 8
 
@@ -24,6 +25,10 @@ type Listing = {
 }
 
 export default function SellScreen() {
+  const { account } = useMobileWallet()
+  const walletAddress = account?.address?.toString()
+  const sellerLabel = account?.label || ''
+
   const [imageUris, setImageUris] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [publishing, setPublishing] = useState(false)
@@ -232,6 +237,14 @@ export default function SellScreen() {
   }
 
   async function publishListing() {
+    if (!walletAddress) {
+      Alert.alert(
+        'Connect wallet',
+        'Connect your Seeker wallet before publishing a listing.'
+      )
+      return
+    }
+
     if (
       !listing ||
       imageUris.length === 0 ||
@@ -286,6 +299,16 @@ export default function SellScreen() {
       formData.append(
         'price',
         String(listing.suggestedPrice)
+      )
+
+      formData.append(
+        'sellerWallet',
+        walletAddress
+      )
+
+      formData.append(
+        'seller',
+        sellerLabel || 'TEFTE seller'
       )
 
       const response = await fetch(
