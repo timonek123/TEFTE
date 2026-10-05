@@ -1078,9 +1078,11 @@ export default function ProfileScreen() {
             <View style={styles.accordionBody}>
               <View style={styles.rewardsPanel}>
           <View style={styles.rewardHeader}>
-            <View style={styles.rewardIcon}>
-              <Text style={styles.rewardEmoji}>XP</Text>
-            </View>
+            <Image
+              source={require('../../assets/images/tefte-mascot.png')}
+              style={styles.rewardMascot}
+              resizeMode="cover"
+            />
 
             <View style={styles.rewardInfo}>
               <Text style={styles.rewardTitle}>SKR purchase rewards</Text>
@@ -2009,7 +2011,7 @@ const styles = StyleSheet.create({
     fontSize: 29,
     fontWeight: '900',
     letterSpacing: -1.2,
-    color: '#111111',
+    color: '#5B331E',
   },
 
   pageLabel: {
@@ -2166,11 +2168,13 @@ const styles = StyleSheet.create({
   },
 
   rewardsPanel: {
-    backgroundColor: '#EEEDE8',
+    backgroundColor: '#FFF3DD',
     borderRadius: 22,
     padding: 15,
     marginTop: 11,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F1D7AE',
   },
 
   rewardHeader: {
@@ -2178,20 +2182,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  rewardIcon: {
+  rewardMascot: {
     width: 52,
-    height: 44,
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 52,
+    borderRadius: 16,
     marginRight: 12,
-  },
-
-  rewardEmoji: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111111',
   },
 
   rewardInfo: {
@@ -2229,7 +2224,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     padding: 14,
     borderRadius: 17,
-    backgroundColor: '#111111',
+    backgroundColor: '#5B331E',
   },
 
   levelTopRow: {
