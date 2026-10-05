@@ -530,7 +530,8 @@ export default function ProfileScreen() {
       loadProducts()
       loadOrders()
       loadRewards()
-    }, [loadProducts, loadOrders, loadRewards]),
+      loadProfile()
+    }, [loadProducts, loadOrders, loadRewards, loadProfile]),
   )
 
   const openEdit = (product: Product) => {
@@ -1107,6 +1108,7 @@ export default function ProfileScreen() {
               loadProducts(true)
               loadOrders()
               loadRewards()
+              loadProfile()
             }}
           />
         }
@@ -1117,16 +1119,50 @@ export default function ProfileScreen() {
             <Text style={styles.pageLabel}>Profile</Text>
           </View>
 
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>T</Text>
-          </View>
+          <Pressable
+            style={styles.avatar}
+            onPress={changeAvatar}
+            disabled={!walletAddress || uploadingAvatar}
+          >
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>T</Text>
+            )}
+          </Pressable>
         </View>
 
         <View style={styles.profileCard}>
           <View style={styles.profileTop}>
-            <View style={styles.bigAvatar}>
-              <Text style={styles.bigAvatarText}>T</Text>
-            </View>
+            <Pressable
+              style={styles.bigAvatar}
+              onPress={changeAvatar}
+              disabled={!walletAddress || uploadingAvatar}
+            >
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.bigAvatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={styles.bigAvatarText}>T</Text>
+              )}
+
+              {walletAddress ? (
+                <View style={styles.avatarEditBadge}>
+                  {uploadingAvatar ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.avatarEditBadgeText}>+</Text>
+                  )}
+                </View>
+              ) : null}
+            </Pressable>
 
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>
