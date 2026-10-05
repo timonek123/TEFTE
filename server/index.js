@@ -815,6 +815,8 @@ app.post(
       condition,
       description,
       price,
+      seller,
+      sellerWallet,
     } = req.body
 
     if (!title || !title.trim()) {
@@ -824,6 +826,17 @@ app.post(
     }
 
     const numericPrice = Number(price)
+
+    const cleanSellerWallet =
+      typeof sellerWallet === 'string'
+        ? sellerWallet.trim()
+        : ''
+
+    if (!cleanSellerWallet) {
+      return res.status(400).json({
+        error: 'Seller wallet is required.',
+      })
+    }
 
     if (
       !Number.isFinite(numericPrice) ||
@@ -860,7 +873,12 @@ app.post(
           ? condition.trim()
           : 'Good',
 
-      seller: 'crypton.skr',
+      seller:
+        typeof seller === 'string' && seller.trim()
+          ? seller.trim()
+          : 'TEFTE seller',
+
+      sellerWallet: cleanSellerWallet,
 
       userListing: true,
 
