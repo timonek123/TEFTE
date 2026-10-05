@@ -54,6 +54,8 @@ type OrderStatus =
   | 'declined_by_seller'
   | 'cancelled_by_buyer'
   | 'shipped'
+  | 'delivered'
+  | 'disputed'
   | 'received'
   | 'completed'
 
@@ -1373,9 +1375,13 @@ export default function ProfileScreen() {
                           ? 'Cancelled'
                           : order.status === 'shipped'
                             ? 'Shipped'
-                            : order.status === 'received'
-                              ? 'Received'
-                              : 'Completed'}
+                            : order.status === 'delivered'
+                              ? 'Delivered'
+                              : order.status === 'disputed'
+                                ? 'Disputed'
+                                : order.status === 'received'
+                                  ? 'Received'
+                                  : 'Completed'}
                 </Text>
               </View>
             </Pressable>
@@ -1734,9 +1740,13 @@ export default function ProfileScreen() {
                           ? 'Cancelled'
                           : order.status === 'shipped'
                             ? 'Shipped'
-                            : order.status === 'received'
-                              ? 'Received'
-                              : 'Completed'}
+                            : order.status === 'delivered'
+                              ? 'Delivered'
+                              : order.status === 'disputed'
+                                ? 'Disputed'
+                                : order.status === 'received'
+                                  ? 'Received'
+                                  : 'Completed'}
                 </Text>
               </View>
             </Pressable>
