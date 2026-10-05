@@ -1081,7 +1081,7 @@ export default function ProfileScreen() {
             <Image
               source={require('../../assets/images/tefte-mascot.png')}
               style={styles.rewardMascot}
-              resizeMode="cover"
+              resizeMode="contain"
             />
 
             <View style={styles.rewardInfo}>
@@ -2183,10 +2183,10 @@ const styles = StyleSheet.create({
   },
 
   rewardMascot: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    marginRight: 12,
+    width: 62,
+    height: 62,
+    marginRight: 10,
+    marginLeft: -4,
   },
 
   rewardInfo: {
