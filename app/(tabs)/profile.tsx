@@ -213,6 +213,8 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [actionId, setActionId] = useState<string | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editTitle, setEditTitle] = useState('')
@@ -222,6 +224,37 @@ export default function ProfileScreen() {
   const [editDescription, setEditDescription] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const [editPhotos, setEditPhotos] = useState<EditPhoto[]>([])
+
+  const loadProfile = useCallback(async () => {
+    if (!walletAddress) {
+      setAvatarUrl(null)
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/profiles/${encodeURIComponent(walletAddress)}`
+      )
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      const rawAvatar = data?.profile?.avatarUrl
+
+      setAvatarUrl(
+        typeof rawAvatar === 'string' && rawAvatar
+          ? rawAvatar.startsWith('http://') || rawAvatar.startsWith('https://')
+            ? rawAvatar
+            : `${API_URL}${rawAvatar}`
+          : null
+      )
+    } catch (err) {
+      console.error('Profile avatar error:', err)
+      setAvatarUrl(null)
+    }
+  }, [walletAddress])
 
   const loadRewards = useCallback(async () => {
     if (!walletAddress) {
