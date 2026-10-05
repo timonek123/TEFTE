@@ -637,12 +637,76 @@ const uploadListing = multer({
   },
 })
 
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOADS_DIR)
+  },
+  filename: (req, file, cb) => {
+    const wallet = String(req.params.wallet || '')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+    cb(null, `avatar-${wallet}.jpg`)
+  },
+})
+
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: {
+    fileSize: 8 * 1024 * 1024,
+  },
+})
+
 app.get('/', (req, res) => {
   res.json({
     message: 'TEFTE AI server is running',
     products: products.length,
   })
 })
+
+app.get('/api/profiles/:wallet', (req, res) => {
+  const wallet = String(req.params.wallet || '')
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+
+  if (!wallet) {
+    return res.status(400).json({ error: 'Wallet is required.' })
+  }
+
+  const filename = `avatar-${wallet}.jpg`
+  const avatarPath = path.join(UPLOADS_DIR, filename)
+
+  res.json({
+    profile: {
+      wallet,
+      avatarUrl: fs.existsSync(avatarPath)
+        ? `/uploads/${filename}`
+        : null,
+    },
+  })
+})
+
+app.post(
+  '/api/profiles/:wallet/avatar',
+  uploadAvatar.single('avatar'),
+  (req, res) => {
+    const wallet = String(req.params.wallet || '')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+
+    if (!wallet) {
+      return res.status(400).json({ error: 'Wallet is required.' })
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Avatar image is required.' })
+    }
+
+    res.status(201).json({
+      message: 'Avatar updated successfully.',
+      profile: {
+        wallet,
+        avatarUrl: `/uploads/${req.file.filename}`,
+      },
+    })
+  }
+)
 
 // Get messages for a TEFTE chat.
 app.get('/api/chats/:chatId/messages', (req, res) => {
